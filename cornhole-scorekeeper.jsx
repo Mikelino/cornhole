@@ -1,0 +1,712 @@
+import { useState, useEffect, useRef } from "react";
+
+const COLORS = [
+  { bg:"linear-gradient(145deg,#7f0000,#e63946)", s:"#e63946" },
+  { bg:"linear-gradient(145deg,#0d47a1,#1d6fa4)", s:"#1d6fa4" },
+  { bg:"linear-gradient(145deg,#1b5e20,#2e7d32)", s:"#2e7d32" },
+  { bg:"linear-gradient(145deg,#4a148c,#7b1fa2)", s:"#7b1fa2" },
+  { bg:"linear-gradient(145deg,#e65100,#f77f00)", s:"#f77f00" },
+  { bg:"linear-gradient(145deg,#006064,#00838f)", s:"#00838f" },
+  { bg:"linear-gradient(145deg,#880e4f,#e91e63)", s:"#e91e63" },
+  { bg:"linear-gradient(145deg,#827717,#f9a825)", s:"#f9a825" },
+];
+const GHOST = [{label:"Easy",min:0,max:3},{label:"Medium",min:2,max:6},{label:"Hard",min:4,max:9},{label:"Pro",min:6,max:12}];
+const W_SCORES = [11,15,21,25];
+const F = "'Barlow Condensed', sans-serif";
+
+const initSettings = () => ({
+  tournamentName:"", sponsors:[],
+  teamA:{name:"Red Team", colorIdx:0, players:["",""], photo:null},
+  teamB:{name:"Blue Team",colorIdx:1, players:["",""], photo:null},
+  playersPerTeam:1, gameMode:"standard",
+  winScore:21, useWinScore:true,
+  maxRounds:10, useMaxRounds:false,
+  cancellation:false, ghostMode:false, ghostDiff:1,
+});
+const initGame = () => ({scores:{a:0,b:0}, round:1, history:[], winner:null, entry:{a:{hole:0,board:0},b:{hole:0,board:0}}});
+const initTournament = () => ({active:false,teams:[],format:"single",matches:[],champion:null});
+
+function calcPts(entry, cancel) {
+  const ra=entry.a.hole*3+entry.a.board, rb=entry.b.hole*3+entry.b.board;
+  if(cancel){const d=ra-rb;return{a:Math.max(0,d),b:Math.max(0,-d)};}
+  return{a:ra,b:rb};
+}
+
+function buildSingle(teams){
+  let n=1; while(n<teams.length)n*=2;
+  const seed=[...teams]; while(seed.length<n)seed.push(null);
+  const ms=[];let id=0;
+  for(let i=0;i<n;i+=2)ms.push({id:id++,tA:seed[i],tB:seed[i+1],winner:seed[i+1]===null?seed[i]:null,scoreA:0,scoreB:0,round:1});
+  let round=2,prev=ms.slice();
+  while(prev.length>1){
+    const next=[];
+    for(let i=0;i<prev.length;i+=2)next.push({id:id++,tA:null,tB:null,winner:null,scoreA:0,scoreB:0,round,fromA:prev[i].id,fromB:prev[i+1].id});
+    ms.push(...next);prev=next;round++;
+  }
+  return ms;
+}
+function buildRR(teams){
+  const ms=[];let id=0;
+  for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++)ms.push({id:id++,tA:teams[i],tB:teams[j],winner:null,scoreA:0,scoreB:0,round:1});
+  return ms;
+}
+
+// ── Confetti ──
+function Confetti(){
+  const ref=useRef(null);
+  useEffect(()=>{
+    const c=ref.current;if(!c)return;
+    c.width=c.offsetWidth;c.height=c.offsetHeight;
+    const ctx=c.getContext("2d");
+    const cols=["#e63946","#f4a100","#1d6fa4","#fff","#f77f00","#ffd166","#e91e63","#2e7d32"];
+    const ps=Array.from({length:120},()=>({x:Math.random()*c.width,y:Math.random()*-c.height,r:Math.random()*7+3,d:Math.random()*2+1,col:cols[Math.floor(Math.random()*cols.length)],a:0,ts:Math.random()*.1+.04}));
+    let run=true;
+    const draw=()=>{if(!run)return;ctx.clearRect(0,0,c.width,c.height);ps.forEach(p=>{p.a+=p.ts;p.y+=p.d+Math.sin(p.a)*.5;p.x+=Math.sin(p.a)*1.5;if(p.y>c.height){p.y=-10;p.x=Math.random()*c.width;}const t=Math.sin(p.a)*12;ctx.beginPath();ctx.lineWidth=p.r/2;ctx.strokeStyle=p.col;ctx.moveTo(p.x+t+p.r/4,p.y);ctx.lineTo(p.x+t,p.y+t+p.r/4);ctx.stroke();});requestAnimationFrame(draw);};
+    draw();return()=>{run=false;};
+  },[]);
+  return <canvas ref={ref} style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}/>;
+}
+
+// ── Toggle ──
+const Toggle=({on,onChange,color="#f4a100"})=>(
+  <div onClick={onChange} style={{width:44,height:24,borderRadius:12,background:on?color:"#333",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+    <div style={{position:"absolute",top:3,left:on?22:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+  </div>
+);
+
+// ── Bag selector ──
+const BagSelector=({label,pts,val,onChange,color})=>(
+  <div style={{marginBottom:10}}>
+    <div style={{fontSize:12,color:"#aaa",marginBottom:5,fontFamily:F,letterSpacing:1,textTransform:"uppercase"}}>{label} <span style={{color,fontWeight:700}}>(+{pts}pt{pts>1?"s":""})</span></div>
+    <div style={{display:"flex",gap:6}}>
+      {[0,1,2,3,4].map(n=><button key={n} onClick={()=>onChange(n)} style={{width:42,height:42,borderRadius:9,border:val===n?`2px solid ${color}`:"2px solid #333",background:val===n?color:"#1a1a1a",color:val===n?"#fff":"#888",fontWeight:700,fontSize:16,cursor:"pointer",fontFamily:F}}>{n}</button>)}
+    </div>
+  </div>
+);
+
+// ── Score summary box ──
+function SummaryBox({ptA,ptB,colA,colB,cancel,rawA,rawB}){
+  const [d,setD]=useState({a:0,b:0});const [ph,setPh]=useState("idle");const prev=useRef("");
+  useEffect(()=>{
+    const k=`${ptA}-${ptB}`;if(k===prev.current)return;prev.current=k;
+    if(!ptA&&!ptB){setD({a:0,b:0});setPh("idle");return;}
+    setPh("counting");setD({a:0,b:0});let s=0;
+    const iv=setInterval(()=>{s++;setD({a:Math.min(s,ptA),b:Math.min(s,ptB)});if(s>=Math.max(ptA,ptB)){clearInterval(iv);setPh("done");}},55);
+    return()=>clearInterval(iv);
+  },[ptA,ptB]);
+  const empty=!ptA&&!ptB;
+  return(
+    <div style={{background:"#0d0d0d",border:"1px solid #252525",borderRadius:14,padding:"12px 14px",marginBottom:14,opacity:empty?.4:1,transition:"opacity .3s"}}>
+      <div style={{fontSize:10,letterSpacing:2,color:"#555",marginBottom:8,fontFamily:F}}>ROUND TOTAL</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-around",position:"relative"}}>
+        <div style={{position:"absolute",fontSize:16,color:"#222",fontWeight:900,fontFamily:F}}>vs</div>
+        {[{v:d.a,p:ptA,c:colA,l:"A"},{v:d.b,p:ptB,c:colB,l:"B"}].map((t,i)=>(
+          <div key={i} style={{textAlign:"center"}}>
+            <div style={{fontSize:52,fontWeight:900,lineHeight:1,color:t.c,fontFamily:F,textShadow:ph==="done"&&t.p>0?`0 0 20px ${t.c}88`:"none",transform:ph==="counting"?"scale(1.08)":"scale(1)",transition:"all .2s"}}>{t.v>0?`+${t.v}`:"0"}</div>
+            <div style={{fontSize:10,color:t.c,opacity:.6,fontFamily:F,letterSpacing:2}}>TEAM {t.l}</div>
+          </div>
+        ))}
+      </div>
+      {cancel&&(rawA>0||rawB>0)&&<div style={{textAlign:"center",marginTop:6,fontSize:11,color:"#444",fontFamily:F}}>Raw: <span style={{color:colA}}>{rawA}</span> – <span style={{color:colB}}>{rawB}</span> → cancellation</div>}
+    </div>
+  );
+}
+
+// ── Score Panel ──
+function TeamPhotos({photo, players, ppTeam, size=44}){
+  const border = Math.max(2, Math.round(size/22));
+  const overlap = Math.round(size * 0.38);
+  const totalW = size + size - overlap;
+
+  if(ppTeam === 2 && players && players.filter(p=>p).length > 0){
+    // 2 joueurs : on affiche 2 cercles chevauchants
+    // Pour la démo on utilise la même photo — en prod chaque joueur aura la sienne
+    return(
+      <div style={{position:"relative",width:totalW,height:size,flexShrink:0,marginBottom:4}}>
+        {photo
+          ? <img src={photo} style={{position:"absolute",right:0,top:0,width:size,height:size,borderRadius:"50%",objectFit:"cover",border:`${border}px solid rgba(255,255,255,.2)`}}/>
+          : <div style={{position:"absolute",right:0,top:0,width:size,height:size,borderRadius:"50%",background:"rgba(255,255,255,.08)",border:`${border}px solid rgba(255,255,255,.15)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.round(size/2.5),fontWeight:900}}>{players[1]?.[0]||"?"}</div>
+        }
+        {photo
+          ? <img src={photo} style={{position:"absolute",left:0,top:0,width:size,height:size,borderRadius:"50%",objectFit:"cover",border:`${border}px solid rgba(255,255,255,.4)`}}/>
+          : <div style={{position:"absolute",left:0,top:0,width:size,height:size,borderRadius:"50%",background:"rgba(255,255,255,.12)",border:`${border}px solid rgba(255,255,255,.35)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.round(size/2.5),fontWeight:900}}>{players[0]?.[0]||"?"}</div>
+        }
+      </div>
+    );
+  }
+
+  if(!photo) return null;
+  return <img src={photo} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",border:`${border}px solid rgba(255,255,255,.4)`,marginBottom:4,flexShrink:0}}/>;
+}
+
+function ScorePanel({name,score,col,pulse,winScore,lead,players,ppTeam,photo}){
+  return(
+    <div style={{flex:1,background:col.bg,borderRadius:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"16px 10px",boxShadow:`0 8px 32px ${col.s}44`,transition:"transform .2s",transform:pulse?"scale(1.06)":"scale(1)",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-30,right:-30,width:110,height:110,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
+      {lead&&<div style={{position:"absolute",top:6,right:8,fontSize:9,letterSpacing:2,color:"rgba(255,255,255,.7)",fontFamily:F,background:"rgba(0,0,0,.2)",borderRadius:5,padding:"2px 5px"}}>LEADING</div>}
+      <TeamPhotos photo={photo} players={players} ppTeam={ppTeam} size={44}/>
+      <div style={{fontFamily:F,fontWeight:800,fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,.8)",marginBottom:1,textAlign:"center",maxWidth:"90%",lineHeight:1.1}}>{name}</div>
+      {ppTeam===2&&players?.filter(p=>p).length>0&&<div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontFamily:F,marginBottom:1,textAlign:"center"}}>{players.filter(p=>p).slice(0,2).join(" · ")}</div>}
+      <div style={{fontFamily:F,fontWeight:900,fontSize:76,lineHeight:1,color:"#fff",textShadow:"0 4px 20px rgba(0,0,0,.4)"}}>{score}</div>
+      <div style={{fontSize:10,color:"rgba(255,255,255,.45)",marginTop:1,fontFamily:F,letterSpacing:1}}>/ {winScore} pts</div>
+      <div style={{width:"100%",background:"rgba(0,0,0,.2)",borderRadius:6,height:5,marginTop:8}}>
+        <div style={{width:`${Math.min((score/winScore)*100,100)}%`,background:"#fff",borderRadius:6,height:5,opacity:.8,transition:"width .5s ease"}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Winner Modal ──
+function WinnerModal({name,col,scores,nA,nB,onReset,onUndo,onMenu}){
+  const [vis,setVis]=useState(false),[shake,setShake]=useState(false);
+  useEffect(()=>{setTimeout(()=>setVis(true),40);setTimeout(()=>setShake(true),320);setTimeout(()=>setShake(false),900);},[]);
+  const c=col.s;
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.88)",backdropFilter:"blur(6px)",padding:16}}>
+      <style>{`@keyframes tb{0%,100%{transform:translateY(0) rotate(0deg)}30%{transform:translateY(-14px) rotate(-6deg)}70%{transform:translateY(-9px) rotate(6deg)}}@keyframes wi{from{transform:translateY(70px) scale(.8);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}@keyframes tsh{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px) rotate(-2deg)}40%{transform:translateX(9px) rotate(2deg)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}@keyframes gp{0%,100%{box-shadow:0 0 30px ${c}44,0 20px 60px rgba(0,0,0,.6)}50%{box-shadow:0 0 70px ${c}88,0 20px 60px rgba(0,0,0,.6)}}`}</style>
+      <Confetti/>
+      <div style={{background:"#111",borderRadius:24,padding:"28px 22px",width:"100%",maxWidth:400,textAlign:"center",border:`2px solid ${c}44`,position:"relative",overflow:"hidden",zIndex:10,animation:vis?"wi .45s cubic-bezier(.34,1.56,.64,1) forwards, gp 2s ease-in-out .6s infinite":"none"}}>
+        <div style={{position:"absolute",inset:0,background:col.bg,opacity:.09}}/>
+        <div style={{fontSize:68,animation:"tb 1.5s ease-in-out .3s infinite",display:"inline-block",marginBottom:4}}>🏆</div>
+        <div style={{fontSize:10,letterSpacing:4,color:"#555",textTransform:"uppercase",marginBottom:4,fontFamily:F}}>WINNER</div>
+        <div style={{fontSize:46,fontWeight:900,color:c,letterSpacing:2,fontFamily:F,textShadow:`0 0 40px ${c}77`,animation:shake?"tsh .6s ease-in-out":"none",lineHeight:1,marginBottom:4}}>{name}</div>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14,margin:"12px 0 18px"}}>
+          {[{s:scores.a,c:"#e63946",n:nA},{s:scores.b,c:"#1d6fa4",n:nB}].map((t,i)=>(
+            <div key={i} style={{textAlign:"center"}}>
+              <div style={{fontSize:42,fontWeight:900,color:t.c,fontFamily:F,lineHeight:1}}>{t.s}</div>
+              <div style={{fontSize:9,color:t.c,opacity:.6,letterSpacing:2,fontFamily:F}}>{t.n.toUpperCase().slice(0,10)}</div>
+            </div>
+          )).reduce((a,b)=>[a,<div key="d" style={{fontSize:24,color:"#333",fontWeight:900,fontFamily:F}}>–</div>,b])}
+        </div>
+        <button onClick={onUndo} style={{width:"100%",padding:"11px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#aaa",fontFamily:F,fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1,marginBottom:8}}>↩ Undo Last Round</button>
+        <button onClick={onReset} style={{width:"100%",padding:"13px 0",borderRadius:13,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",fontFamily:F,fontSize:18,fontWeight:900,cursor:"pointer",letterSpacing:1,boxShadow:"0 6px 24px rgba(244,161,0,.4)",marginBottom:8}}>🎮 Nouvelle Partie</button>
+        <button onClick={onMenu} style={{width:"100%",padding:"11px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#aaa",fontFamily:F,fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1}}>◀ Retour au Menu</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tournament ──
+function Tournament({t,onResult,onClose}){
+  const [sel,setSel]=useState(null),[sA,setSA]=useState(0),[sB,setSB]=useState(0);
+  const rounds=[...new Set(t.matches.map(m=>m.round))].sort((a,b)=>a-b);
+  const submit=()=>{if(!sel)return;onResult(sel.id,sA,sB);setSel(null);setSA(0);setSB(0);};
+  let standings=null;
+  if(t.format==="roundrobin"){
+    const p={};t.teams.forEach(tm=>{p[tm]={w:0,l:0,pts:0,diff:0};});
+    t.matches.forEach(m=>{if(m.winner){p[m.winner].w++;p[m.winner].pts+=2;const lo=m.winner===m.tA?m.tB:m.tA;p[lo].l++;const d=Math.abs(m.scoreA-m.scoreB);p[m.winner].diff+=d;p[lo].diff-=d;}});
+    standings=t.teams.map(tm=>({name:tm,...p[tm]})).sort((a,b)=>b.pts-a.pts||b.diff-a.diff);
+  }
+  const S={fontFamily:F};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:150,display:"flex",flexDirection:"column",backdropFilter:"blur(4px)"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{background:"#111",borderBottom:"1px solid #222",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontSize:10,letterSpacing:3,color:"#555",...S}}>TOURNOI</div><div style={{fontSize:20,fontWeight:900,...S}}>{t.format==="single"?"Élimination Simple":"Round Robin"}</div></div>
+        <button onClick={onClose} style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:9,color:"#aaa",padding:"7px 13px",cursor:"pointer",...S,fontSize:13,fontWeight:700}}>✕ Fermer</button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:14}}>
+        {t.champion&&<div style={{background:"linear-gradient(135deg,#f4a100,#f77f00)",borderRadius:14,padding:"14px 18px",marginBottom:14,textAlign:"center"}}><div style={{fontSize:28,...S,fontWeight:900,color:"#000"}}>🏆 {t.champion}</div></div>}
+        {standings&&<div style={{background:"#1a1a1a",borderRadius:12,padding:12,marginBottom:14,border:"1px solid #2a2a2a"}}>
+          <div style={{fontSize:10,letterSpacing:2,color:"#555",marginBottom:8,...S}}>CLASSEMENT</div>
+          {standings.map((s,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<standings.length-1?"1px solid #222":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:i===0?"#fdd835":i===1?"#aaa":"#555",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#000"}}>{i+1}</div>
+                <span style={{...S,fontWeight:700,fontSize:14}}>{s.name}</span>
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <span style={{color:"#2e7d32",fontSize:12,...S,fontWeight:700}}>{s.w}W</span>
+                <span style={{color:"#e63946",fontSize:12,...S,fontWeight:700}}>{s.l}L</span>
+                <span style={{color:"#f4a100",fontSize:12,...S,fontWeight:700}}>{s.pts}pts</span>
+              </div>
+            </div>
+          ))}
+        </div>}
+        {rounds.map(r=>(
+          <div key={r} style={{marginBottom:14}}>
+            <div style={{fontSize:10,letterSpacing:2,color:"#555",marginBottom:7,...S,textTransform:"uppercase"}}>Round {r}</div>
+            {t.matches.filter(m=>m.round===r).map(m=>(
+              <div key={m.id} onClick={()=>!m.winner&&m.tA&&m.tB&&setSel(m)}
+                style={{background:m.winner?"#0d0d0d":"#1a1a1a",borderRadius:11,padding:"11px 13px",marginBottom:7,border:m.winner?"1px solid #1a1a1a":"1px solid #2a2a2a",cursor:!m.winner&&m.tA&&m.tB?"pointer":"default",opacity:!m.tA||!m.tB?.4:1}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{...S,fontWeight:m.winner===m.tA?900:500,fontSize:14,color:m.winner===m.tA?"#fff":"#777",flex:1}}>{m.tA||"En attente"}</div>
+                  <div style={{display:"flex",gap:7,alignItems:"center",padding:"0 8px"}}>
+                    <span style={{fontSize:17,fontWeight:900,...S,color:"#fff"}}>{m.scoreA}</span>
+                    <span style={{color:"#333",fontSize:12}}>vs</span>
+                    <span style={{fontSize:17,fontWeight:900,...S,color:"#fff"}}>{m.scoreB}</span>
+                  </div>
+                  <div style={{...S,fontWeight:m.winner===m.tB?900:500,fontSize:14,color:m.winner===m.tB?"#fff":"#777",flex:1,textAlign:"right"}}>{m.tB||"En attente"}</div>
+                </div>
+                {m.winner&&<div style={{textAlign:"center",fontSize:10,color:"#f4a100",marginTop:3,...S,letterSpacing:1}}>✓ {m.winner}</div>}
+                {!m.winner&&m.tA&&m.tB&&<div style={{textAlign:"center",fontSize:10,color:"#444",marginTop:3,...S}}>Appuyer pour entrer le score</div>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {sel&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",display:"flex",alignItems:"flex-end",zIndex:200}}>
+          <div style={{background:"#111",borderRadius:"18px 18px 0 0",padding:22,width:"100%",border:"1px solid #2a2a2a"}}>
+            <div style={{fontSize:17,fontWeight:900,...S,marginBottom:14,textAlign:"center"}}>Score du Match</div>
+            <div style={{display:"flex",gap:12,marginBottom:18}}>
+              {[{team:sel.tA,val:sA,set:setSA},{team:sel.tB,val:sB,set:setSB}].map((t,i)=>(
+                <div key={i} style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:12,color:"#aaa",...S,marginBottom:7}}>{t.team}</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                    <button onClick={()=>t.set(Math.max(0,t.val-1))} style={{width:34,height:34,borderRadius:7,background:"#2a2a2a",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>−</button>
+                    <span style={{fontSize:34,fontWeight:900,...S,minWidth:36,textAlign:"center"}}>{t.val}</span>
+                    <button onClick={()=>t.set(t.val+1)} style={{width:34,height:34,borderRadius:7,background:"#2a2a2a",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:9}}>
+              <button onClick={()=>setSel(null)} style={{flex:1,padding:"12px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#888",...S,fontSize:15,fontWeight:700,cursor:"pointer"}}>Annuler</button>
+              <button onClick={submit} disabled={sA===sB} style={{flex:2,padding:"12px 0",borderRadius:11,background:sA!==sB?"linear-gradient(135deg,#f4a100,#f77f00)":"#2a2a2a",border:"none",color:sA!==sB?"#000":"#555",...S,fontSize:16,fontWeight:900,cursor:sA!==sB?"pointer":"not-allowed",letterSpacing:1}}>Valider</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── History Modal ──
+function History({games,onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:150,display:"flex",flexDirection:"column",backdropFilter:"blur(4px)"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{background:"#111",borderBottom:"1px solid #222",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:F}}>Historique</div>
+        <button onClick={onClose} style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:9,color:"#aaa",padding:"7px 13px",cursor:"pointer",fontFamily:F,fontSize:13,fontWeight:700}}>✕</button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:14}}>
+        {!games.length&&<div style={{textAlign:"center",color:"#555",paddingTop:40,fontFamily:F,fontSize:16}}>Aucune partie enregistrée</div>}
+        {games.slice().reverse().map((g,i)=>(
+          <div key={i} style={{background:"#1a1a1a",borderRadius:13,padding:13,marginBottom:11,border:"1px solid #2a2a2a"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
+              <div style={{fontSize:11,color:"#555",fontFamily:F}}>{g.date}</div>
+              <div style={{fontSize:10,color:"#f4a100",fontFamily:F}}>{g.rounds} manches</div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{textAlign:"center"}}><div style={{fontSize:30,fontWeight:900,fontFamily:F,color:"#e63946"}}>{g.sA}</div><div style={{fontSize:10,color:"#aaa",fontFamily:F}}>{g.nA}</div></div>
+              <div style={{fontSize:13,color:g.winner===g.nA?"#e63946":"#1d6fa4",fontFamily:F,fontWeight:900}}>🏆 {g.winner}</div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:30,fontWeight:900,fontFamily:F,color:"#1d6fa4"}}>{g.sB}</div><div style={{fontSize:10,color:"#aaa",fontFamily:F}}>{g.nB}</div></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Setup Screen ──
+function Setup({onStart}){
+  const [cfg,setCfg]=useState(initSettings());
+  const [cWin,setCWin]=useState(""); const [cRnd,setCRnd]=useState("");
+  const [showT,setShowT]=useState(false);
+  const [tTeams,setTTeams]=useState(["","","",""]);
+  const [tFmt,setTFmt]=useState("single");
+
+  const set=(path,val)=>setCfg(s=>{const c=JSON.parse(JSON.stringify(s));const ks=path.split(".");let o=c;for(let i=0;i<ks.length-1;i++)o=o[ks[i]];o[ks[ks.length-1]]=val;return c;});
+  const cA=COLORS[cfg.teamA.colorIdx], cB=COLORS[cfg.teamB.colorIdx];
+  const fWin=cWin?parseInt(cWin)||21:cfg.winScore;
+  const fRnd=cRnd?parseInt(cRnd)||10:cfg.maxRounds;
+  const n=cfg.playersPerTeam;
+
+  const multiples=[];let mi=1;while(multiples.length<4){const v=n*mi;if(v>=2&&v<=40)multiples.push(v);mi++;if(mi>50)break;}
+
+  const photoInput=(key)=>(e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>set(`${key}.photo`,ev.target.result);r.readAsDataURL(f);});
+  const logoInput=(i)=>(e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const u=[...cfg.sponsors];u[i]={...u[i],logo:ev.target.result};set("sponsors",u);};r.readAsDataURL(f);});
+
+  const Inp=(p)=><input {...p} style={{background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:9,padding:"9px 11px",color:"#fff",fontFamily:F,fontSize:p.big?17:14,fontWeight:p.big?700:400,...(p.style||{})}}/>;
+
+  const S={fontFamily:F};
+  const Label=({t})=><div style={{fontSize:10,letterSpacing:2,color:"#555",marginTop:18,marginBottom:8,...S}}>{t}</div>;
+
+  return(
+    <div style={{minHeight:"100vh",background:"#0a0a0a",...S,color:"#fff",display:"flex",flexDirection:"column"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet"/>
+      <div style={{padding:"22px 18px 6px"}}><div style={{fontSize:10,letterSpacing:3,color:"#555"}}>CORNHOLE</div><div style={{fontSize:28,fontWeight:900,letterSpacing:1}}>SCOREKEEPER</div></div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"0 18px 18px"}}>
+        {/* Nom événement */}
+        <Label t="NOM DE L'ÉVÉNEMENT"/>
+        <input value={cfg.tournamentName} onChange={e=>set("tournamentName",e.target.value)} placeholder="Ex: Open Cornhole 2025"
+          style={{width:"100%",background:"#111",border:"1px solid #2a2a2a",borderRadius:12,padding:"13px 15px",color:"#fff",fontSize:17,fontFamily:F,fontWeight:700,boxSizing:"border-box",letterSpacing:1}}/>
+        {cfg.tournamentName&&<div style={{textAlign:"center",marginTop:6,fontSize:11,color:"#555"}}>Affiché pendant la partie et sur les vues TV</div>}
+
+        {/* Format NvN */}
+        <Label t="FORMAT"/>
+        <div style={{display:"flex",gap:10,marginBottom:8}}>
+          {[1,2].map(v=>(
+            <button key={v} onClick={()=>set("playersPerTeam",v)} style={{flex:1,padding:"16px 0",borderRadius:14,background:n===v?"#fff":"#1a1a1a",border:n===v?"2px solid #fff":"2px solid #2a2a2a",color:n===v?"#000":"#888",fontFamily:F,fontSize:24,fontWeight:900,cursor:"pointer",lineHeight:1}}>
+              {v}v{v}
+              <div style={{fontSize:11,fontWeight:600,marginTop:4,opacity:.6}}>{v===1?"Solo":"Duo"}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{textAlign:"center",fontSize:12,color:"#555",marginBottom:14}}>{n===1?"1 joueur par équipe":"2 joueurs par équipe — photos superposées"}</div>
+
+        {/* Équipes */}
+        <Label t="ÉQUIPES"/>
+        {[["teamA","Équipe A"],["teamB","Équipe B"]].map(([key,lbl])=>(
+          <div key={key} style={{background:"#111",borderRadius:13,padding:13,marginBottom:9,border:"1px solid #1e1e1e"}}>
+            <div style={{fontSize:11,color:"#555",marginBottom:7}}>{lbl}</div>
+            <div style={{display:"flex",gap:9,alignItems:"center",marginBottom:9}}>
+              {/* Photo */}
+              <div style={{position:"relative",flexShrink:0}}>
+                <div style={{width:52,height:52,borderRadius:11,background:cfg[key].photo?"transparent":"#1a1a1a",border:`2px dashed ${cfg[key].photo?COLORS[cfg[key].colorIdx].s:"#333"}`,overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {cfg[key].photo?<img src={cfg[key].photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:20}}>📷</span>}
+                </div>
+                <input type="file" accept="image/*" onChange={photoInput(key)} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/>
+                {cfg[key].photo&&<div onClick={()=>set(`${key}.photo`,null)} style={{position:"absolute",top:-5,right:-5,width:17,height:17,borderRadius:"50%",background:"#e63946",color:"#fff",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontWeight:900}}>✕</div>}
+              </div>
+              <input value={cfg[key].name} onChange={e=>set(`${key}.name`,e.target.value)} placeholder={lbl}
+                style={{flex:1,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:9,padding:"10px 11px",color:"#fff",fontSize:15,fontFamily:F,fontWeight:700,boxSizing:"border-box"}}/>
+            </div>
+            {/* Joueurs */}
+            <div style={{display:"flex",gap:7,marginBottom:9}}>
+              {n===1?(
+                <input value={cfg[key].players?.[0]||""} onChange={e=>set(`${key}.players`,[e.target.value,""])} placeholder="Nom du joueur"
+                  style={{flex:1,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:7,padding:"8px 10px",color:"#aaa",fontSize:13,fontFamily:F}}/>
+              ):(
+                <>
+                  <input value={cfg[key].players?.[0]||""} onChange={e=>{const p=[...(cfg[key].players||["",""])];p[0]=e.target.value;set(`${key}.players`,p);}} placeholder="Joueur 1"
+                    style={{flex:1,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:7,padding:"8px 10px",color:"#aaa",fontSize:13,fontFamily:F}}/>
+                  <input value={cfg[key].players?.[1]||""} onChange={e=>{const p=[...(cfg[key].players||["",""])];p[1]=e.target.value;set(`${key}.players`,p);}} placeholder="Joueur 2"
+                    style={{flex:1,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:7,padding:"8px 10px",color:"#aaa",fontSize:13,fontFamily:F}}/>
+                </>
+              )}
+            </div>
+            {/* Couleurs */}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {COLORS.map((c,i)=><div key={i} onClick={()=>set(`${key}.colorIdx`,i)} style={{width:26,height:26,borderRadius:"50%",background:c.s,border:cfg[key].colorIdx===i?"2px solid #fff":"2px solid transparent",cursor:"pointer",boxShadow:cfg[key].colorIdx===i?`0 0 7px ${c.s}`:"none"}}/>)}
+            </div>
+          </div>
+        ))}
+
+        {/* Mode de jeu */}
+        <Label t="MODE DE JEU"/>
+        <div style={{display:"flex",gap:7,marginBottom:8}}>
+          {[["standard","Standard"],["bust","Bust"],["rounds","Rounds"]].map(([id,lbl])=>(
+            <button key={id} onClick={()=>set("gameMode",id)} style={{flex:1,padding:"10px 0",borderRadius:11,background:cfg.gameMode===id?"#fff":"#1a1a1a",border:cfg.gameMode===id?"2px solid #fff":"2px solid #2a2a2a",color:cfg.gameMode===id?"#000":"#888",fontFamily:F,fontSize:13,fontWeight:800,cursor:"pointer"}}>{lbl}</button>
+          ))}
+        </div>
+        <div style={{background:"#0d0d0d",borderRadius:10,padding:"10px 12px",marginBottom:12,border:"1px solid #1a1a1a"}}>
+          {cfg.gameMode==="standard"&&<div><div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:3}}>Mode Standard</div><div style={{fontSize:11,color:"#555",lineHeight:1.4}}>Premier à atteindre ou dépasser le score gagnant. Pas de pénalité si on dépasse 21.</div></div>}
+          {cfg.gameMode==="bust"&&<div><div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:3}}>Mode Bust (Règle du Dépassement)</div><div style={{fontSize:11,color:"#555",lineHeight:1.4}}>Si ton score dépasse 21, il redescend à 15. Rend la fin de partie plus tactique.</div></div>}
+          {cfg.gameMode==="rounds"&&<div><div style={{fontSize:13,color:"#fff",fontWeight:700,marginBottom:3}}>Mode Rounds (Manches fixes)</div><div style={{fontSize:11,color:"#555",lineHeight:1.4}}>La partie s'arrête après X manches. Le score le plus élevé gagne, peu importe le total.</div></div>}
+        </div>
+
+        {/* Score cible */}
+        <Label t="SCORE CIBLE"/>
+        <div style={{fontSize:11,color:"#444",marginBottom:8}}>Désactiver pour jouer sans limite de score.</div>
+        <div style={{display:"flex",gap:7,marginBottom:7}}>
+          {W_SCORES.map(w=><button key={w} onClick={()=>{set("winScore",w);set("useWinScore",true);setCWin("");}} style={{flex:1,padding:"11px 0",borderRadius:11,background:cfg.useWinScore&&cfg.winScore===w&&!cWin?"#fff":"#1a1a1a",border:cfg.useWinScore&&cfg.winScore===w&&!cWin?"2px solid #fff":"2px solid #2a2a2a",color:cfg.useWinScore&&cfg.winScore===w&&!cWin?"#000":"#888",fontFamily:F,fontSize:17,fontWeight:800,cursor:"pointer"}}>{w}</button>)}
+          <input value={cWin} onChange={e=>{setCWin(e.target.value.replace(/\D/g,""));set("useWinScore",true);}} placeholder="?" style={{flex:1,background:cWin?"#fff":"#1a1a1a",border:cWin?"2px solid #fff":"2px solid #2a2a2a",borderRadius:11,color:cWin?"#000":"#555",fontFamily:F,fontSize:15,fontWeight:700,textAlign:"center",padding:"11px 0"}}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <Toggle on={cfg.useWinScore} onChange={()=>set("useWinScore",!cfg.useWinScore)}/>
+          <span style={{fontSize:12,color:cfg.useWinScore?"#f4a100":"#555",fontWeight:700}}>{cfg.useWinScore?"Activé":"Désactivé"}</span>
+        </div>
+
+        {/* Max manches */}
+        <Label t="NOMBRE MAX DE MANCHES"/>
+        <div style={{fontSize:11,color:"#444",marginBottom:8}}>Multiples de {n} → chaque joueur lance le même nombre de fois.</div>
+        <div style={{display:"flex",gap:7,marginBottom:4}}>
+          {multiples.map(r=><button key={r} onClick={()=>{set("maxRounds",r);set("useMaxRounds",true);setCRnd("");}} style={{flex:1,padding:"8px 0",borderRadius:11,background:cfg.useMaxRounds&&cfg.maxRounds===r&&!cRnd?"#1d6fa4":"#1a1a1a",border:cfg.useMaxRounds&&cfg.maxRounds===r&&!cRnd?"2px solid #1d6fa4":"2px solid #2a2a2a",color:cfg.useMaxRounds&&cfg.maxRounds===r&&!cRnd?"#fff":"#888",fontFamily:F,fontWeight:800,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+            <span style={{fontSize:17}}>{r}</span><span style={{fontSize:9,opacity:.6}}>{r/n}×/j</span>
+          </button>)}
+          <input value={cRnd} onChange={e=>{const v=e.target.value.replace(/\D/g,"");setCRnd(v);if(v){const snap=Math.ceil(parseInt(v)/n)*n;set("maxRounds",snap);set("useMaxRounds",true);}}} onBlur={()=>{if(cRnd){const snap=Math.ceil(parseInt(cRnd)/n)*n;setCRnd(String(snap));set("maxRounds",snap);}}} placeholder="?" style={{flex:1,background:cRnd?"#1d6fa4":"#1a1a1a",border:cRnd?"2px solid #1d6fa4":"2px solid #2a2a2a",borderRadius:11,color:cRnd?"#fff":"#555",fontFamily:F,fontSize:15,fontWeight:700,textAlign:"center",padding:"8px 0"}}/>
+        </div>
+        {cRnd&&parseInt(cRnd)%n!==0&&<div style={{fontSize:11,color:"#f4a100",marginBottom:5}}>⚡ Sera arrondi à {Math.ceil(parseInt(cRnd)/n)*n} manches</div>}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <Toggle on={cfg.useMaxRounds} onChange={()=>set("useMaxRounds",!cfg.useMaxRounds)} color="#1d6fa4"/>
+          <span style={{fontSize:12,color:cfg.useMaxRounds?"#1d6fa4":"#555",fontWeight:700}}>{cfg.useMaxRounds?"Activé":"Désactivé"}</span>
+        </div>
+
+        {/* Résumé conditions */}
+        <div style={{background:"#111",borderRadius:11,padding:"9px 13px",marginTop:10,border:"1px solid #1e1e1e"}}>
+          <div style={{fontSize:10,color:"#555",marginBottom:5,letterSpacing:1}}>CONDITIONS DE FIN DE PARTIE</div>
+          <div style={{fontSize:13,color:"#aaa",marginBottom:cfg.useMaxRounds?7:0}}>
+            {!cfg.useWinScore&&!cfg.useMaxRounds&&"⚠️ Aucune condition — partie sans fin !"}
+            {cfg.useWinScore&&!cfg.useMaxRounds&&`🏆 Premier à ${fWin} pts gagne`}
+            {!cfg.useWinScore&&cfg.useMaxRounds&&`⏱ Après ${fRnd} manches → meilleur score gagne`}
+            {cfg.useWinScore&&cfg.useMaxRounds&&`🏆 Premier à ${fWin} pts OU après ${fRnd} manches`}
+          </div>
+          {cfg.useMaxRounds&&<div style={{background:"#0a0a0a",borderRadius:7,padding:"7px 10px",display:"flex",justifyContent:"space-around"}}>
+            <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:"#f4a100"}}>{fRnd/n}</div><div style={{fontSize:9,color:"#555"}}>lancers/joueur</div><div style={{fontSize:9,color:"#2e7d32"}}>✓ équitable</div></div>
+            <div style={{width:1,background:"#222"}}/>
+            <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:"#aaa"}}>{fRnd}</div><div style={{fontSize:9,color:"#555"}}>manches</div></div>
+            <div style={{width:1,background:"#222"}}/>
+            <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,color:"#aaa"}}>{fRnd*n*2*4}</div><div style={{fontSize:9,color:"#555"}}>sacs max</div></div>
+          </div>}
+        </div>
+
+        {/* Options */}
+        <Label t="OPTIONS"/>
+
+        {/* Cancellation */}
+        <div onClick={()=>set("cancellation",!cfg.cancellation)} style={{background:"#111",borderRadius:11,padding:"11px 13px",marginBottom:7,border:`1px solid ${cfg.cancellation?"#f4a10044":"#1e1e1e"}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+          <div style={{flex:1,paddingRight:12}}>
+            <div style={{fontSize:14,fontWeight:700}}>Cancellation Scoring <span style={{fontSize:11,color:"#f4a100",fontWeight:600}}>{cfg.cancellation?"(OFFICIEL ACL)":""}</span></div>
+            <div style={{fontSize:11,color:"#555",marginTop:3,lineHeight:1.4}}>
+              {cfg.cancellation
+                ? "Seule la différence compte par manche. Ex: A=7pts, B=5pts → A marque 2, B marque 0."
+                : "Chaque équipe marque tous ses points bruts. Ex: A=7pts, B=5pts → A+7, B+5. (Mode backyard)"}
+            </div>
+          </div>
+          <Toggle on={cfg.cancellation} onChange={()=>{}}/>
+        </div>
+
+        {/* Ghost mode */}
+        <div onClick={()=>set("ghostMode",!cfg.ghostMode)} style={{background:"#111",borderRadius:11,padding:"11px 13px",marginBottom:7,border:"1px solid #1e1e1e",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+          <div style={{flex:1,paddingRight:12}}>
+            <div style={{fontSize:14,fontWeight:700}}>Ghost Mode 👻</div>
+            <div style={{fontSize:11,color:"#555",marginTop:3}}>Jouer seul contre un adversaire virtuel qui score aléatoirement.</div>
+          </div>
+          <Toggle on={cfg.ghostMode} onChange={()=>{}}/>
+        </div>
+        {cfg.ghostMode&&<div style={{background:"#111",borderRadius:11,padding:12,marginBottom:7,border:"1px solid #2a2a2a"}}>
+          <div style={{fontSize:11,color:"#555",marginBottom:7}}>Difficulté</div>
+          <div style={{display:"flex",gap:6}}>
+            {GHOST.map((g,i)=><button key={i} onClick={()=>set("ghostDiff",i)} style={{flex:1,padding:"7px 0",borderRadius:9,background:cfg.ghostDiff===i?"#f4a100":"#1a1a1a",border:"none",color:cfg.ghostDiff===i?"#000":"#888",fontFamily:F,fontSize:12,fontWeight:700,cursor:"pointer"}}>{g.label}</button>)}
+          </div>
+        </div>}
+
+        {/* Tournoi */}
+        <div onClick={()=>setShowT(!showT)} style={{background:"#111",borderRadius:11,padding:"11px 13px",marginTop:7,marginBottom:showT?0:7,border:"1px solid #1e1e1e",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+          <div><div style={{fontSize:14,fontWeight:700}}>🏆 Organiser un tournoi</div><div style={{fontSize:11,color:"#555",marginTop:1}}>Élimination simple ou round robin</div></div>
+          <div style={{color:"#555",fontSize:16}}>{showT?"▲":"▼"}</div>
+        </div>
+        {showT&&<div style={{background:"#0d0d0d",borderRadius:"0 0 11px 11px",padding:13,marginBottom:7,border:"1px solid #1e1e1e",borderTop:"none"}}>
+          <div style={{fontSize:11,color:"#555",marginBottom:7}}>Format</div>
+          <div style={{display:"flex",gap:7,marginBottom:13}}>
+            {[["single","Élim. simple"],["roundrobin","Round Robin"]].map(([id,lbl])=><button key={id} onClick={()=>setTFmt(id)} style={{flex:1,padding:"9px 0",borderRadius:9,background:tFmt===id?"#fff":"#1a1a1a",border:"none",color:tFmt===id?"#000":"#888",fontFamily:F,fontSize:13,fontWeight:700,cursor:"pointer"}}>{lbl}</button>)}
+          </div>
+          <div style={{fontSize:11,color:"#555",marginBottom:7}}>Équipes (min. 3)</div>
+          {tTeams.map((tm,i)=>(
+            <div key={i} style={{display:"flex",gap:7,marginBottom:5}}>
+              <input value={tm} onChange={e=>{const c=[...tTeams];c[i]=e.target.value;setTTeams(c);}} placeholder={`Équipe ${i+1}`} style={{flex:1,background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:7,padding:"7px 9px",color:"#fff",fontFamily:F,fontSize:13}}/>
+              {i>=3&&<button onClick={()=>setTTeams(tTeams.filter((_,j)=>j!==i))} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#e63946",padding:"0 9px",cursor:"pointer"}}>✕</button>}
+            </div>
+          ))}
+          <button onClick={()=>setTTeams([...tTeams,""])} style={{width:"100%",padding:"7px 0",borderRadius:7,background:"#1a1a1a",border:"1px dashed #333",color:"#555",fontFamily:F,fontSize:12,cursor:"pointer",marginBottom:11}}>+ Ajouter une équipe</button>
+          <button onClick={()=>{const ts=tTeams.filter(t=>t.trim());if(ts.length<3)return;onStart({cfg:{...cfg,winScore:fWin,maxRounds:fRnd},tour:{active:true,teams:ts,format:tFmt,matches:tFmt==="single"?buildSingle(ts):buildRR(ts),champion:null}});}} disabled={tTeams.filter(t=>t.trim()).length<3}
+            style={{width:"100%",padding:"13px 0",borderRadius:11,background:tTeams.filter(t=>t.trim()).length>=3?"linear-gradient(135deg,#f4a100,#f77f00)":"#1a1a1a",border:"none",color:tTeams.filter(t=>t.trim()).length>=3?"#000":"#555",fontFamily:F,fontSize:16,fontWeight:900,cursor:"pointer",letterSpacing:1}}>🏆 Lancer le Tournoi</button>
+        </div>}
+
+        {/* Sponsors */}
+        <Label t="SPONSORS"/>
+        <div style={{fontSize:11,color:"#444",marginBottom:9}}>Logos défilants pendant la partie et sur les vues TV.</div>
+        {cfg.sponsors.map((sp,i)=>(
+          <div key={i} style={{background:"#111",borderRadius:11,padding:11,marginBottom:7,border:"1px solid #1e1e1e",display:"flex",gap:9,alignItems:"center"}}>
+            <div style={{position:"relative",flexShrink:0}}>
+              <div style={{width:46,height:46,borderRadius:7,background:"#1a1a1a",border:"1px dashed #333",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                {sp.logo?<img src={sp.logo} style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{fontSize:18}}>🏢</span>}
+              </div>
+              <input type="file" accept="image/*" onChange={logoInput(i)} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/>
+            </div>
+            <input value={sp.name} onChange={e=>{const u=[...cfg.sponsors];u[i]={...u[i],name:e.target.value};set("sponsors",u);}} placeholder="Nom du sponsor" style={{flex:1,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:7,padding:"9px 11px",color:"#fff",fontFamily:F,fontSize:14,fontWeight:700}}/>
+            <button onClick={()=>set("sponsors",cfg.sponsors.filter((_,j)=>j!==i))} style={{background:"#2a2a2a",border:"none",borderRadius:7,color:"#e63946",padding:"7px 9px",cursor:"pointer",fontSize:15,flexShrink:0}}>✕</button>
+          </div>
+        ))}
+        <button onClick={()=>set("sponsors",[...cfg.sponsors,{name:"",logo:null}])} style={{width:"100%",padding:"9px 0",borderRadius:9,background:"#111",border:"1px dashed #2a2a2a",color:"#555",fontFamily:F,fontSize:13,cursor:"pointer",marginBottom:4}}>+ Ajouter un sponsor</button>
+      </div>
+
+      {/* Preview + Start */}
+      <div style={{padding:"0 18px 22px"}}>
+        <div style={{display:"flex",gap:9,marginBottom:13}}>
+          {[["teamA",cA],["teamB",cB]].map(([k,c])=>(
+            <div key={k} style={{flex:1,background:c.bg,borderRadius:13,padding:"9px 0",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+              {cfg[k].photo&&<div style={{width:26,height:26,borderRadius:"50%",overflow:"hidden",border:"1px solid rgba(255,255,255,.4)"}}><img src={cfg[k].photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>}
+              <div style={{fontFamily:F,fontWeight:900,fontSize:14,color:"#fff"}}>{cfg[k].name||`Équipe ${k==="teamA"?"A":"B"}`}</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={()=>onStart({cfg:{...cfg,winScore:fWin,maxRounds:fRnd},tour:initTournament()})} style={{width:"100%",padding:"17px 0",borderRadius:15,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",fontFamily:F,fontSize:21,fontWeight:900,cursor:"pointer",letterSpacing:1,boxShadow:"0 6px 24px rgba(244,161,0,.4)"}}>🎯 Commencer la Partie</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ──
+export default function App(){
+  const [screen,setScreen]=useState("setup");
+  const [cfg,setCfg]=useState(initSettings());
+  const [game,setGame]=useState(initGame());
+  const [tour,setTour]=useState(initTournament());
+  const [allGames,setAllGames]=useState([]);
+  const [pA,setPA]=useState(false),[pB,setPB]=useState(false);
+  const [showScore,setShowScore]=useState(false),[showStats,setShowStats]=useState(false);
+
+  const cA=COLORS[cfg.teamA.colorIdx], cB=COLORS[cfg.teamB.colorIdx];
+  const ghost=GHOST[cfg.ghostDiff];
+  const rawA=game.entry.a.hole*3+game.entry.a.board;
+  const rawB=game.entry.b.hole*3+game.entry.b.board;
+  const prev=calcPts(game.entry,cfg.cancellation);
+
+  const handleStart=({cfg:c,tour:t})=>{setCfg(c);setGame(initGame());setTour(t);setScreen(t.active?"tournament":"game");};
+
+  const saveRound=()=>{
+    const pts=calcPts(game.entry,cfg.cancellation);
+    let gPts=0;
+    if(cfg.ghostMode){gPts=Math.floor(Math.random()*(ghost.max-ghost.min+1))+ghost.min;gPts=Math.min(gPts,12);}
+    let nA=game.scores.a+pts.a, nB=cfg.ghostMode?game.scores.b+gPts:game.scores.b+pts.b;
+    if(cfg.gameMode==="bust"){if(nA>cfg.winScore)nA=15;if(nB>cfg.winScore)nB=15;}
+    const hist=[...game.history,{round:game.round,entry:game.entry,pts:{a:pts.a,b:cfg.ghostMode?gPts:pts.b},before:{...game.scores}}];
+    const nRound=game.round+1;
+    let winner=null;
+    if(cfg.useWinScore){if(nA>=cfg.winScore&&nA>nB)winner="a";else if(nB>=cfg.winScore&&nB>nA)winner="b";else if(nA>=cfg.winScore&&nB>=cfg.winScore)winner=nA>=nB?"a":"b";}
+    if(!winner&&cfg.useMaxRounds&&nRound>cfg.maxRounds+1){if(nA>nB)winner="a";else if(nB>nA)winner="b";else winner="tie";}
+    if(pts.a>0){setPA(true);setTimeout(()=>setPA(false),400);}
+    if((cfg.ghostMode?gPts:pts.b)>0){setPB(true);setTimeout(()=>setPB(false),400);}
+    const ng={...game,scores:{a:nA,b:nB},round:nRound,history:hist,winner,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};
+    setGame(ng);setShowScore(false);
+    if(winner&&winner!=="tie"){const wn=winner==="a"?cfg.teamA.name:cfg.teamB.name;setAllGames(p=>[...p,{date:new Date().toLocaleDateString("fr-FR"),nA:cfg.teamA.name,nB:cfg.teamB.name,sA:nA,sB:nB,winner:wn,rounds:hist.length}]);}
+  };
+
+  const undo=()=>{if(!game.history.length)return;const l=game.history[game.history.length-1];setGame(g=>({...g,scores:l.before,round:l.round,history:g.history.slice(0,-1),winner:null}));};
+
+  const handleMatchResult=(id,sA,sB)=>{
+    setTour(t=>{
+      const ms=t.matches.map(m=>{if(m.id!==id)return m;const w=sA>sB?m.tA:m.tB;return{...m,scoreA:sA,scoreB:sB,winner:w};});
+      if(t.format==="single"){ms.forEach(m=>{if(m.fromA!==undefined){const ma=ms.find(x=>x.id===m.fromA),mb=ms.find(x=>x.id===m.fromB);if(ma?.winner)m.tA=ma.winner;if(mb?.winner)m.tB=mb.winner;}});}
+      const fin=ms[ms.length-1];return{...t,matches:ms,champion:fin?.winner||null};
+    });
+  };
+
+  const hR=game.history;
+  const hA=hR.reduce((a,h)=>a+h.entry.a.hole,0),hB=hR.reduce((a,h)=>a+h.entry.b.hole,0);
+  const bA=hR.reduce((a,h)=>a+h.entry.a.board,0),bB=hR.reduce((a,h)=>a+h.entry.b.board,0);
+  const rp=hR.length;
+  const Modal=({children})=>(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.78)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16,backdropFilter:"blur(4px)"}}><div style={{background:"#111",borderRadius:18,padding:22,width:"100%",maxWidth:420,boxShadow:"0 24px 80px rgba(0,0,0,.8)",border:"1px solid #2a2a2a",maxHeight:"90vh",overflowY:"auto"}}>{children}</div></div>);
+
+  const S={fontFamily:F};
+
+  if(screen==="setup")return<Setup onStart={handleStart}/>;
+  if(screen==="history")return<History games={allGames} onClose={()=>setScreen("game")}/>;
+  if(screen==="tournament")return<Tournament t={tour} onResult={handleMatchResult} onClose={()=>setScreen("setup")}/>;
+
+  return(
+    <div style={{minHeight:"100vh",background:"#0a0a0a",...S,color:"#fff",display:"flex",flexDirection:"column"}}>
+      <style>{`:root{--font:'Barlow Condensed',sans-serif}@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet"/>
+
+      {/* Header */}
+      <div style={{padding:"13px 14px 0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button onClick={()=>setScreen("setup")} style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:9,padding:"5px 11px",color:"#aaa",...S,fontSize:12,fontWeight:700,cursor:"pointer"}}>◀ Setup</button>
+        <div style={{textAlign:"center"}}>
+          {cfg.tournamentName&&<div style={{fontSize:10,color:"#f4a100",letterSpacing:2,fontWeight:700}}>🏆 {cfg.tournamentName}</div>}
+          <div style={{fontSize:10,letterSpacing:3,color:"#444"}}>CORNHOLE SCOREKEEPER</div>
+        </div>
+        <div style={{display:"flex",gap:5}}>
+          <button onClick={()=>setScreen("history")} style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:9,padding:"5px 9px",color:"#aaa",...S,fontSize:12,fontWeight:700,cursor:"pointer"}}>📋</button>
+          <div style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:9,padding:"5px 11px",fontSize:12,fontWeight:700,color:"#aaa"}}>{cfg.useMaxRounds?`${game.round-1}/${cfg.maxRounds}`:`R${game.round}`}</div>
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div style={{padding:"6px 14px",display:"flex",gap:5,flexWrap:"wrap"}}>
+        {[`${cfg.playersPerTeam}v${cfg.playersPerTeam}`,cfg.cancellation&&"ACL CANCEL.",cfg.gameMode==="bust"&&"BUST +21→15",cfg.ghostMode&&`👻 ${ghost.label}`,cfg.useMaxRounds&&`${Math.round(cfg.maxRounds/cfg.playersPerTeam)}×/j`].filter(Boolean).map((b,i)=><div key={i} style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:18,padding:"2px 9px",fontSize:10,color:"#aaa",letterSpacing:1,fontWeight:700}}>{b}</div>)}
+      </div>
+
+      {/* Scores */}
+      <div style={{padding:"0 14px",display:"flex",gap:9,flex:1}}>
+        <ScorePanel name={cfg.teamA.name} score={game.scores.a} col={cA} pulse={pA} winScore={cfg.winScore} lead={game.scores.a>game.scores.b} players={cfg.teamA.players} ppTeam={cfg.playersPerTeam} photo={cfg.teamA.photo}/>
+        {cfg.ghostMode
+          ?<div style={{flex:1,background:"#1a1a1a",borderRadius:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"16px 10px",border:"1px solid #2a2a2a",position:"relative"}}><div style={{position:"absolute",top:8,right:8,fontSize:18}}>👻</div><div style={{...S,fontWeight:800,fontSize:11,letterSpacing:2,color:"#444",marginBottom:2}}>GHOST</div><div style={{...S,fontWeight:900,fontSize:76,lineHeight:1,color:"#444"}}>{game.scores.b}</div></div>
+          :<ScorePanel name={cfg.teamB.name} score={game.scores.b} col={cB} pulse={pB} winScore={cfg.winScore} lead={game.scores.b>game.scores.a} players={cfg.teamB.players} ppTeam={cfg.playersPerTeam} photo={cfg.teamB.photo}/>
+        }
+      </div>
+
+      {/* History strip */}
+      {hR.length>0&&<div style={{padding:"10px 14px 0"}}>
+        <div style={{display:"flex",gap:5,overflowX:"auto",paddingBottom:3}}>
+          {hR.slice().reverse().map((h,i)=><div key={i} style={{background:"#1a1a1a",borderRadius:7,padding:"5px 9px",minWidth:56,textAlign:"center",border:"1px solid #222",flexShrink:0}}>
+            <div style={{fontSize:9,color:"#444",marginBottom:1}}>R{h.round}</div>
+            <div style={{fontSize:12,fontWeight:700}}><span style={{color:cA.s}}>+{h.pts.a}</span><span style={{color:"#333",margin:"0 2px"}}>|</span><span style={{color:cfg.ghostMode?"#555":cB.s}}>+{h.pts.b}</span></div>
+          </div>)}
+        </div>
+      </div>}
+
+      {/* Sponsors ticker */}
+      {cfg.sponsors.length>0&&<div style={{margin:"8px 14px 0",background:"#111",borderRadius:9,padding:"5px 0",overflow:"hidden",border:"1px solid #1e1e1e"}}>
+        <div style={{display:"flex",animation:"ticker "+String(cfg.sponsors.length*4)+"s linear infinite",width:"max-content"}}>
+          {[...cfg.sponsors,...cfg.sponsors].map((sp,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"0 20px",borderRight:"1px solid #222",flexShrink:0}}>
+            {sp.logo&&<img src={sp.logo} style={{height:20,width:"auto",objectFit:"contain",opacity:.8}}/>}
+            {sp.name&&<span style={{...S,fontSize:12,fontWeight:700,color:"#555",letterSpacing:1,whiteSpace:"nowrap"}}>{sp.name}</span>}
+          </div>)}
+        </div>
+      </div>}
+
+      {/* Actions */}
+      <div style={{padding:14,display:"flex",gap:7}}>
+        <button onClick={()=>setShowStats(true)} style={{flex:1,padding:"11px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #2a2a2a",color:"#aaa",...S,fontSize:13,fontWeight:700,cursor:"pointer"}}>📊</button>
+        <button onClick={undo} disabled={!hR.length} style={{flex:1,padding:"11px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #2a2a2a",color:hR.length?"#aaa":"#333",...S,fontSize:13,fontWeight:700,cursor:hR.length?"pointer":"not-allowed"}}>↩</button>
+        <button onClick={()=>setGame(initGame())} style={{flex:1,padding:"11px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #2a2a2a",color:"#aaa",...S,fontSize:13,fontWeight:700,cursor:"pointer"}}>↺</button>
+        <button onClick={()=>setShowScore(true)} style={{flex:3,padding:"11px 0",borderRadius:11,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",...S,fontSize:15,fontWeight:900,cursor:"pointer",letterSpacing:1,boxShadow:"0 4px 20px rgba(244,161,0,.3)"}}>+ Score</button>
+      </div>
+
+      {/* Enter Score Modal */}
+      {showScore&&<Modal><div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:13}}>
+          <div style={{fontSize:19,fontWeight:900,letterSpacing:1}}>Entrer les scores</div>
+          <div style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:7,padding:"3px 9px",fontSize:12,color:"#aaa"}}>Round <span style={{color:"#fff",fontWeight:800}}>{game.round}</span></div>
+        </div>
+        <SummaryBox ptA={prev.a} ptB={cfg.ghostMode?0:prev.b} colA={cA.s} colB={cB.s} cancel={cfg.cancellation} rawA={rawA} rawB={rawB}/>
+        <div style={{background:cA.s+"12",borderRadius:13,padding:13,marginBottom:10,border:`1px solid ${cA.s}30`}}>
+          <div style={{fontSize:15,fontWeight:900,color:cA.s,letterSpacing:2,marginBottom:9}}>🎯 {cfg.teamA.name}</div>
+          <BagSelector label="Bags In Hole" pts={3} val={game.entry.a.hole} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,hole:v}}}))}/>
+          <BagSelector label="Bags On Board" pts={1} val={game.entry.a.board} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,board:v}}}))}/>
+        </div>
+        {!cfg.ghostMode&&<div style={{background:cB.s+"12",borderRadius:13,padding:13,marginBottom:13,border:`1px solid ${cB.s}30`}}>
+          <div style={{fontSize:15,fontWeight:900,color:cB.s,letterSpacing:2,marginBottom:9}}>🎯 {cfg.teamB.name}</div>
+          <BagSelector label="Bags In Hole" pts={3} val={game.entry.b.hole} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,hole:v}}}))}/>
+          <BagSelector label="Bags On Board" pts={1} val={game.entry.b.board} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,board:v}}}))}/>
+        </div>}
+        {cfg.ghostMode&&<div style={{background:"#111",borderRadius:13,padding:13,marginBottom:13,border:"1px solid #222",textAlign:"center"}}>
+          <div style={{fontSize:12,color:"#555",marginBottom:3}}>👻 Ghost score entre {ghost.min} et {ghost.max} pts</div>
+          <div style={{fontSize:11,color:"#444"}}>Révélé après validation</div>
+        </div>}
+        <div style={{display:"flex",gap:9}}>
+          <button onClick={()=>{setShowScore(false);setGame(g=>({...g,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}}));}} style={{flex:1,padding:"12px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#888",...S,fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
+          <button onClick={saveRound} style={{flex:2,padding:"12px 0",borderRadius:11,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",...S,fontSize:16,fontWeight:900,cursor:"pointer",letterSpacing:1}}>Valider la Manche</button>
+        </div>
+      </div></Modal>}
+
+      {/* Stats Modal */}
+      {showStats&&<Modal><div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:19,fontWeight:900,letterSpacing:1}}>Statistiques</div>
+          <div style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:7,padding:"3px 9px",fontSize:12,color:"#aaa"}}>Rounds: <span style={{color:"#fff",fontWeight:800}}>{rp}</span></div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:34,fontWeight:900,color:cA.s}}>{game.scores.a}</div>
+          <div style={{fontSize:34,fontWeight:900,color:cB.s}}>{game.scores.b}</div>
+        </div>
+        {[["Bags In Hole",hA,hB],["Bags On Board",bA,bB],["Overall Bags",hA+bA,hB+bB],["Avg PPR",rp?(game.scores.a/rp).toFixed(2):"0.00",rp?(game.scores.b/rp).toFixed(2):"0.00"]].map(([lbl,a,b],i)=>{
+          const tot=(Number(a)+Number(b))||1,pct=Math.round(Number(a)/tot*100);
+          return<div key={i} style={{background:"#1a1a1a",borderRadius:11,padding:"9px 13px",marginBottom:7,border:"1px solid #222"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:13,fontWeight:700}}><span style={{color:cA.s}}>{a}</span><span style={{color:"#555",fontSize:11,textTransform:"uppercase",letterSpacing:1}}>{lbl}</span><span style={{color:cB.s}}>{b}</span></div>
+            <div style={{display:"flex",borderRadius:5,overflow:"hidden",height:6}}><div style={{width:`${pct}%`,background:cA.s,transition:"width .4s"}}/><div style={{width:`${100-pct}%`,background:cB.s}}/></div>
+          </div>;
+        })}
+        <button onClick={()=>setShowStats(false)} style={{width:"100%",padding:"12px 0",borderRadius:11,marginTop:5,background:"#1a1a1a",border:"1px solid #333",color:"#fff",...S,fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1}}>Fermer</button>
+      </div></Modal>}
+
+      {/* Winner */}
+      {game.winner&&game.winner!=="tie"&&<WinnerModal name={game.winner==="a"?cfg.teamA.name:cfg.teamB.name} col={game.winner==="a"?cA:cB} scores={game.scores} nA={cfg.teamA.name} nB={cfg.teamB.name} onReset={()=>setGame(initGame())} onUndo={undo} onMenu={()=>{setGame(initGame());setScreen("setup");}}/>}
+      {game.winner==="tie"&&<Modal><div style={{textAlign:"center"}}>
+        <div style={{fontSize:52,marginBottom:8}}>🤝</div>
+        <div style={{fontSize:32,fontWeight:900,letterSpacing:2,marginBottom:16}}>ÉGALITÉ !</div>
+        <div style={{fontSize:22,color:"#aaa",marginBottom:20}}>{game.scores.a} – {game.scores.b}</div>
+        <button onClick={undo} style={{width:"100%",padding:"12px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#aaa",...S,fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:9}}>↩ Undo Last Round</button>
+        <button onClick={()=>setGame(initGame())} style={{width:"100%",padding:"13px 0",borderRadius:13,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",...S,fontSize:17,fontWeight:900,cursor:"pointer",letterSpacing:1,marginBottom:9}}>🎮 Nouvelle Partie</button>
+        <button onClick={()=>{setGame(initGame());setScreen("setup");}} style={{width:"100%",padding:"12px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#aaa",...S,fontSize:14,fontWeight:700,cursor:"pointer"}}>◀ Retour au Menu</button>
+      </div></Modal>}
+    </div>
+  );
+}

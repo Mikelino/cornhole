@@ -237,28 +237,28 @@ function renderCarteSimple(m) {
       <!-- Équipe A -->
       <div style="margin-bottom:10px;">
         <div style="font-size:11px;color:#e63946;font-weight:700;margin-bottom:6px;letter-spacing:1px;">${m.nomA}</div>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:8px;">
           <div style="flex:1;">
-            <div style="font-size:9px;color:#444;margin-bottom:4px;letter-spacing:1px;">TROU (×3pts)</div>
-            <div style="display:flex;gap:4px;">${[0,1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','trou',${n})" style="flex:1;height:38px;border-radius:7px;border:1.5px solid ${st.A.trou===n?"#e63946":"#222"};background:${st.A.trou===n?"#e63946":"#151515"};color:${st.A.trou===n?"#fff":"#555"};font-size:15px;font-weight:700;cursor:pointer;">${n}</button>`).join("")}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#e63946;font-weight:700;">(3 Points)</span></div>
+            <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','trou',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.A.trou===n?"#e63946":"#d0d0d0"};border:none;color:${st.A.trou===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.A.trou===n?"0 4px 12px #e6394666":"none"};transform:${st.A.trou===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
           <div style="flex:1;">
-            <div style="font-size:9px;color:#444;margin-bottom:4px;letter-spacing:1px;">PLATEAU (×1pt)</div>
-            <div style="display:flex;gap:4px;">${[0,1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','plateau',${n})" style="flex:1;height:38px;border-radius:7px;border:1.5px solid ${st.A.plateau===n?"#e63946":"#222"};background:${st.A.plateau===n?"#e63946":"#151515"};color:${st.A.plateau===n?"#fff":"#555"};font-size:15px;font-weight:700;cursor:pointer;">${n}</button>`).join("")}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#e63946;font-weight:700;">(1 Point)</span></div>
+            <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','plateau',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.A.plateau===n?"#e63946":"#d0d0d0"};border:none;color:${st.A.plateau===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.A.plateau===n?"0 4px 12px #e6394666":"none"};transform:${st.A.plateau===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
         </div>
       </div>
       <!-- Équipe B -->
       <div style="margin-bottom:10px;">
         <div style="font-size:11px;color:#1d6fa4;font-weight:700;margin-bottom:6px;letter-spacing:1px;">${m.nomB}</div>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:8px;">
           <div style="flex:1;">
-            <div style="font-size:9px;color:#444;margin-bottom:4px;letter-spacing:1px;">TROU (×3pts)</div>
-            <div style="display:flex;gap:4px;">${[0,1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','trou',${n})" style="flex:1;height:38px;border-radius:7px;border:1.5px solid ${st.B.trou===n?"#1d6fa4":"#222"};background:${st.B.trou===n?"#1d6fa4":"#151515"};color:${st.B.trou===n?"#fff":"#555"};font-size:15px;font-weight:700;cursor:pointer;">${n}</button>`).join("")}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#1d6fa4;font-weight:700;">(3 Points)</span></div>
+            <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','trou',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.B.trou===n?"#1d6fa4":"#d0d0d0"};border:none;color:${st.B.trou===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.B.trou===n?"0 4px 12px #1d6fa466":"none"};transform:${st.B.trou===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
           <div style="flex:1;">
-            <div style="font-size:9px;color:#444;margin-bottom:4px;letter-spacing:1px;">PLATEAU (×1pt)</div>
-            <div style="display:flex;gap:4px;">${[0,1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','plateau',${n})" style="flex:1;height:38px;border-radius:7px;border:1.5px solid ${st.B.plateau===n?"#1d6fa4":"#222"};background:${st.B.plateau===n?"#1d6fa4":"#151515"};color:${st.B.plateau===n?"#fff":"#555"};font-size:15px;font-weight:700;cursor:pointer;">${n}</button>`).join("")}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#1d6fa4;font-weight:700;">(1 Point)</span></div>
+            <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','plateau',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.B.plateau===n?"#1d6fa4":"#d0d0d0"};border:none;color:${st.B.plateau===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.B.plateau===n?"0 4px 12px #1d6fa466":"none"};transform:${st.B.plateau===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
         </div>
       </div>
@@ -303,7 +303,9 @@ window.ajouterMatchSimple=()=>{
 };
 window.setSacsSimple=(id,eq,type,val)=>{
   if(!sacsEnCours[id])sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  sacsEnCours[id][eq][type]=val;renderListeSimple();
+  // Toggle : cliquer sur le même bouton remet à 0
+  sacsEnCours[id][eq][type]=sacsEnCours[id][eq][type]===val?0:val;
+  renderListeSimple();
 };
 window.annulerSaisie=(id)=>{sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};renderListeSimple();};
 window.validerMancheSimple=(id)=>{

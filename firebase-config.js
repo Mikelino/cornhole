@@ -9,7 +9,7 @@
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyB_x1oGxbmP12EVP0P82aBootK-yd8nMPo",
   authDomain: "cornhole-scorekeeper-f0042.firebaseapp.com",
-  databaseURL: "https://cornhole-scorekeeper-f0042-default-rtdb.europe-west1.firebasedatabase.app",
+  databaseURL: "https://console.firebase.google.com/project/cornhole-scorekeeper-f0042/database/cornhole-scorekeeper-f0042-default-rtdb/data/~2F",
   projectId: "cornhole-scorekeeper-f0042",
   storageBucket: "cornhole-scorekeeper-f0042.firebasestorage.app",
   messagingSenderId: "77982373274",

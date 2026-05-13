@@ -74,10 +74,11 @@ let sk = {
     tournamentName:"", sponsors:[],
   },
   game: {scores:{a:0,b:0}, round:1, history:[], winner:null, entry:{a:{hole:0,board:0},b:{hole:0,board:0}}},
-  screen: "setup", // setup | game
+  screen: "setup",
   showScore: false, showStats: false,
   allGames: [],
 };
+window.sk = sk;
 const GHOST_PRESET = () => GHOST[sk.cfg.ghostDiff];
 
 function calcPts(entry, cancel) {
@@ -364,26 +365,26 @@ function renderSKSetup(){
               ${c[key].photo?`<img src="${c[key].photo}" style="width:100%;height:100%;object-fit:cover;"/>`:`<span style="font-size:20px;">📷</span>`}
             </div>
             <input type="file" accept="image/*" onchange="setSKPhoto('${key}',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>
-            ${c[key].photo?`<div onclick="sk.cfg.${key}.photo=null;renderSKSetup()" style="position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;background:#e63946;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:900;">✕</div>`:""}
+            ${c[key].photo?`<div onclick="window['clearSKPhoto${key==='teamA'?'A':'B'}']&&clearSKPhoto${key==='teamA'?'A':'B'}()" style="position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;background:#e63946;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:900;">✕</div>`:""}
           </div>
-          <input value="${c[key].name}" oninput="sk.cfg.${key}.name=this.value" placeholder="Équipe ${ki===0?"A":"B"}"
+          <input value="${c[key].name}" oninput="window.sk.cfg.${key}.name=this.value" placeholder="Équipe ${ki===0?"A":"B"}"
             style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:10px 11px;color:#fff;font-size:15px;font-weight:700;box-sizing:border-box;"/>
         </div>
         <div style="display:flex;gap:7px;margin-bottom:9px;">
           ${n===1
-            ?`<input value="${c[key].players?.[0]||""}" oninput="sk.cfg.${key}.players[0]=this.value" placeholder="Nom du joueur" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
-            :`<input value="${c[key].players?.[0]||""}" oninput="sk.cfg.${key}.players[0]=this.value" placeholder="Joueur 1" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>
-             <input value="${c[key].players?.[1]||""}" oninput="sk.cfg.${key}.players[1]=this.value" placeholder="Joueur 2" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
+            ?`<input value="${c[key].players?.[0]||""}" oninput="window.sk.cfg.${key}.players[0]=this.value" placeholder="Nom du joueur" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
+            :`<input value="${c[key].players?.[0]||""}" oninput="window.sk.cfg.${key}.players[0]=this.value" placeholder="Joueur 1" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>
+             <input value="${c[key].players?.[1]||""}" oninput="window.sk.cfg.${key}.players[1]=this.value" placeholder="Joueur 2" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
           }
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${COLORS.map((cl,ci)=>`<div onclick="sk.cfg.${key}.colorIdx=${ci};renderSKSetup()" style="width:26px;height:26px;border-radius:50%;background:${cl.s};border:${c[key].colorIdx===ci?"2px solid #fff":"2px solid transparent"};cursor:pointer;box-shadow:${c[key].colorIdx===ci?`0 0 7px ${cl.s}`:"none"};"></div>`).join("")}
+          ${COLORS.map((cl,ci)=>`<div onclick="window.setSKColor${key==='teamA'?'A':'B'}(${ci})" style="width:26px;height:26px;border-radius:50%;background:${cl.s};border:${c[key].colorIdx===ci?"2px solid #fff":"2px solid transparent"};cursor:pointer;box-shadow:${c[key].colorIdx===ci?`0 0 7px ${cl.s}`:"none"};"></div>`).join("")}
         </div>
       </div>`).join("")}
 
       <div style="font-size:10px;letter-spacing:2px;color:#555;margin-top:14px;margin-bottom:8px;">MODE DE JEU</div>
       <div style="display:flex;gap:7px;margin-bottom:8px;">
-        ${[["standard","Standard"],["bust","Bust"],["rounds","Rounds"]].map(([id,lbl])=>`<button onclick="sk.cfg.gameMode='${id}';renderSKSetup()" style="flex:1;padding:10px 0;border-radius:11px;background:${c.gameMode===id?"#fff":"#1a1a1a"};border:${c.gameMode===id?"2px solid #fff":"2px solid #2a2a2a"};color:${c.gameMode===id?"#000":"#888"};font-size:13px;font-weight:800;cursor:pointer;">${lbl}</button>`).join("")}
+        ${[["standard","Standard"],["bust","Bust"],["rounds","Rounds"]].map(([id,lbl])=>`<button onclick="setSKGameMode('${id}')" style="flex:1;padding:10px 0;border-radius:11px;background:${c.gameMode===id?"#fff":"#1a1a1a"};border:${c.gameMode===id?"2px solid #fff":"2px solid #2a2a2a"};color:${c.gameMode===id?"#000":"#888"};font-size:13px;font-weight:800;cursor:pointer;">${lbl}</button>`).join("")}
       </div>
       <div style="background:#0d0d0d;border-radius:10px;padding:10px 12px;margin-bottom:12px;border:1px solid #1a1a1a;font-size:11px;color:#555;line-height:1.4;">
         ${c.gameMode==="standard"?"Premier à atteindre ou dépasser le score gagnant.":c.gameMode==="bust"?"Dépasser 21 → score redescend à 15. Fin de partie tactique.":"Nombre fixe de manches. Le score le plus élevé gagne."}
@@ -391,35 +392,35 @@ function renderSKSetup(){
 
       <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:6px;">SCORE CIBLE</div>
       <div style="display:flex;gap:7px;margin-bottom:7px;">
-        ${[11,15,21,25].map(w=>`<button onclick="sk.cfg.winScore=${w};sk.cfg.useWinScore=true;renderSKSetup()" style="flex:1;padding:10px 0;border-radius:11px;background:${c.useWinScore&&c.winScore===w?"#fff":"#1a1a1a"};border:${c.useWinScore&&c.winScore===w?"2px solid #fff":"2px solid #2a2a2a"};color:${c.useWinScore&&c.winScore===w?"#000":"#888"};font-size:16px;font-weight:800;cursor:pointer;">${w}</button>`).join("")}
+        ${[11,15,21,25].map(w=>`<button onclick="setSKWinScore(${w})" style="flex:1;padding:10px 0;border-radius:11px;background:${c.useWinScore&&c.winScore===w?"#fff":"#1a1a1a"};border:${c.useWinScore&&c.winScore===w?"2px solid #fff":"2px solid #2a2a2a"};color:${c.useWinScore&&c.winScore===w?"#000":"#888"};font-size:16px;font-weight:800;cursor:pointer;">${w}</button>`).join("")}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="sk.cfg.useWinScore=!sk.cfg.useWinScore;renderSKSetup()">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="toggleSKWinScore()">
         <div style="width:44px;height:24px;border-radius:12px;background:${c.useWinScore?"#f4a100":"#333"};position:relative;cursor:pointer;flex-shrink:0;"><div style="position:absolute;top:3px;left:${c.useWinScore?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>
         <span style="font-size:12px;color:${c.useWinScore?"#f4a100":"#555"};font-weight:700;">${c.useWinScore?"Activé":"Désactivé"}</span>
       </div>
 
       <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:6px;">MAX MANCHES <span style="color:#444;">(multiples de ${n})</span></div>
       <div style="display:flex;gap:7px;margin-bottom:7px;">
-        ${multiples.map(r=>`<button onclick="sk.cfg.maxRounds=${r};sk.cfg.useMaxRounds=true;renderSKSetup()" style="flex:1;padding:8px 0;border-radius:11px;background:${c.useMaxRounds&&c.maxRounds===r?"#1d6fa4":"#1a1a1a"};border:${c.useMaxRounds&&c.maxRounds===r?"2px solid #1d6fa4":"2px solid #2a2a2a"};color:${c.useMaxRounds&&c.maxRounds===r?"#fff":"#888"};font-weight:800;cursor:pointer;font-size:16px;">${r}<div style="font-size:9px;opacity:.6;">${r/n}×/j</div></button>`).join("")}
+        ${multiples.map(r=>`<button onclick="setSKMaxRounds(${r})" style="flex:1;padding:8px 0;border-radius:11px;background:${c.useMaxRounds&&c.maxRounds===r?"#1d6fa4":"#1a1a1a"};border:${c.useMaxRounds&&c.maxRounds===r?"2px solid #1d6fa4":"2px solid #2a2a2a"};color:${c.useMaxRounds&&c.maxRounds===r?"#fff":"#888"};font-weight:800;cursor:pointer;font-size:16px;">${r}<div style="font-size:9px;opacity:.6;">${r/n}×/j</div></button>`).join("")}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="sk.cfg.useMaxRounds=!sk.cfg.useMaxRounds;renderSKSetup()">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="toggleSKMaxRounds()">
         <div style="width:44px;height:24px;border-radius:12px;background:${c.useMaxRounds?"#1d6fa4":"#333"};position:relative;cursor:pointer;flex-shrink:0;"><div style="position:absolute;top:3px;left:${c.useMaxRounds?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>
         <span style="font-size:12px;color:${c.useMaxRounds?"#1d6fa4":"#555"};font-weight:700;">${c.useMaxRounds?"Activé":"Désactivé"}</span>
       </div>
 
       <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">OPTIONS</div>
-      <div onclick="sk.cfg.cancellation=!sk.cfg.cancellation;renderSKSetup()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:7px;border:1px solid ${c.cancellation?"#f4a10044":"#1e1e1e"};display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+      <div onclick="toggleSKCancellation()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:7px;border:1px solid ${c.cancellation?"#f4a10044":"#1e1e1e"};display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
         <div><div style="font-size:14px;font-weight:700;">Cancellation Scoring ${c.cancellation?`<span style="font-size:11px;color:#f4a100;">(ACL)</span>`:""}</div>
         <div style="font-size:11px;color:#555;margin-top:3px;">${c.cancellation?"Seule la différence compte. Ex: A=7, B=5 → A+2, B+0":"Straight scoring : chaque équipe marque ses points bruts"}</div></div>
         <div style="width:44px;height:24px;border-radius:12px;background:${c.cancellation?"#f4a100":"#333"};position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:${c.cancellation?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;"></div></div>
       </div>
-      <div onclick="sk.cfg.ghostMode=!sk.cfg.ghostMode;renderSKSetup()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:14px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+      <div onclick="toggleSKGhost()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:14px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
         <div><div style="font-size:14px;font-weight:700;">Ghost Mode 👻</div><div style="font-size:11px;color:#555;margin-top:3px;">Jouer contre un adversaire virtuel</div></div>
         <div style="width:44px;height:24px;border-radius:12px;background:${c.ghostMode?"#f4a100":"#333"};position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:${c.ghostMode?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;"></div></div>
       </div>
       ${c.ghostMode?`<div style="background:#111;border-radius:11px;padding:12px;margin-bottom:14px;border:1px solid #2a2a2a;">
         <div style="font-size:11px;color:#555;margin-bottom:7px;">Difficulté Ghost</div>
-        <div style="display:flex;gap:6px;">${GHOST.map((g,i)=>`<button onclick="sk.cfg.ghostDiff=${i};renderSKSetup()" style="flex:1;padding:7px 0;border-radius:9px;background:${c.ghostDiff===i?"#f4a100":"#1a1a1a"};border:none;color:${c.ghostDiff===i?"#000":"#888"};font-size:12px;font-weight:700;cursor:pointer;">${g.label}</button>`).join("")}</div>
+        <div style="display:flex;gap:6px;">${GHOST.map((g,i)=>`<button onclick="setSKGhostDiff(${i})" style="flex:1;padding:7px 0;border-radius:9px;background:${c.ghostDiff===i?"#f4a100":"#1a1a1a"};border:none;color:${c.ghostDiff===i?"#000":"#888"};font-size:12px;font-weight:700;cursor:pointer;">${g.label}</button>`).join("")}</div>
       </div>`:""}
 
       <!-- Preview -->
@@ -436,6 +437,22 @@ function renderSKSetup(){
 window.setSKPPT=(v)=>{sk.cfg.playersPerTeam=v;renderSKSetup();};
 window.setSKPhoto=(key,input)=>{const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{sk.cfg[key].photo=ev.target.result;renderSKSetup();};r.readAsDataURL(f);};
 window.startSKGame=()=>{sk.game={scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};sk.screen="game";sk.showScore=false;sk.showStats=false;renderSKGame();};
+window.setSKGameMode=(m)=>{sk.cfg.gameMode=m;renderSKSetup();};
+window.setSKWinScore=(w)=>{sk.cfg.winScore=w;sk.cfg.useWinScore=true;renderSKSetup();};
+window.toggleSKWinScore=()=>{sk.cfg.useWinScore=!sk.cfg.useWinScore;renderSKSetup();};
+window.setSKMaxRounds=(r)=>{sk.cfg.maxRounds=r;sk.cfg.useMaxRounds=true;renderSKSetup();};
+window.toggleSKMaxRounds=()=>{sk.cfg.useMaxRounds=!sk.cfg.useMaxRounds;renderSKSetup();};
+window.toggleSKCancellation=()=>{sk.cfg.cancellation=!sk.cfg.cancellation;renderSKSetup();};
+window.toggleSKGhost=()=>{sk.cfg.ghostMode=!sk.cfg.ghostMode;renderSKSetup();};
+window.setSKGhostDiff=(i)=>{sk.cfg.ghostDiff=i;renderSKSetup();};
+window.setSKColorA=(i)=>{sk.cfg.teamA.colorIdx=i;renderSKSetup();};
+window.setSKColorB=(i)=>{sk.cfg.teamB.colorIdx=i;renderSKSetup();};
+window.clearSKPhotoA=()=>{sk.cfg.teamA.photo=null;renderSKSetup();};
+window.clearSKPhotoB=()=>{sk.cfg.teamB.photo=null;renderSKSetup();};
+window.setSKNameA=(v)=>{sk.cfg.teamA.name=v;};
+window.setSKNameB=(v)=>{sk.cfg.teamB.name=v;};
+window.setSKPlayer=(team,idx,v)=>{sk.cfg[team].players[idx]=v;};
+window.setSKTournamentName=(v)=>{sk.cfg.tournamentName=v;};
 
 function renderSKGame(){
   const c=sk.cfg,g=sk.game;

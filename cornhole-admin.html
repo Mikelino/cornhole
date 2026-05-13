@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cornhole — Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db  = getDatabase(app);
+    const F   = "'Barlow Condensed', sans-serif";
+
+    // ── State ──
+    let tournoi = null;
+    let tournoiId = localStorage.getItem("cornhole_admin_id") || null;
+
+    // ── Helpers ──
+    const $ = id => document.getElementById(id);
+    const el = (tag, style, html) => {
+      const e = document.createElement(tag);
+      if (style) e.style.cssText = style;
+      if (html)  e.innerHTML = html;
+      return e;
+    };
+    const uid = () => Math.random().toString(36).slice(2, 9);
+    const baseUrl = () => window.location.href.replace("cornhole-admin.html", "");
+
+    // ── Init UI ──
+    function renderApp() {
+      document.body.style.cssText = "margin:0;background:#0a0a0a;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;";
+      document.body.innerHTML = `
+        <div style="max-width:520px;margin:0 auto;padding:20px 16px 40px;">
+          <div style="margin-bottom:20px;">
+            <div style="font-size:10px;letter-spacing:3px;color:#555;">CORNHOLE</div>
+            <div style="font-size:28px;font-weight:900;letter-spacing:1px;">ADMIN</div>
+          </div>
+          <div id="main"></div>
+        </div>`;
+      if (tournoiId) loadTournoi();
+      else renderSetup();
+    }
+
+    // ── Setup nouveau tournoi ──
+    function renderSetup() {
+      $("main").innerHTML = `
+        <div style="background:#111;border-radius:14px;padding:18px;border:1px solid #1e1e1e;margin-bottom:12px;">
+          <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU TOURNOI</div>
+          <input id="nom" placeholder="Nom du tournoi" style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:12px;color:#fff;font-size:16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;box-sizing:border-box;margin-bottom:10px;"/>
+          <div style="font-size:11px;color:#555;margin-bottom:8px;">FORMAT</div>
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button onclick="setFmt('simple')" id="btn-simple" style="flex:1;padding:10px;border-radius:10px;background:#fff;border:2px solid #fff;color:#000;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;cursor:pointer;">Partie simple</button>
+            <button onclick="setFmt('tournoi')" id="btn-tournoi" style="flex:1;padding:10px;border-radius:10px;background:#1a1a1a;border:2px solid #2a2a2a;color:#888;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;cursor:pointer;">Tournoi</button>
+          </div>
+          <button onclick="creerTournoi()" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">🎯 Créer</button>
+        </div>`;
+    }
+
+    let fmt = "simple";
+    window.setFmt = f => {
+      fmt = f;
+      ["simple","tournoi"].forEach(k => {
+        const b = $(`btn-${k}`);
+        if (k === f) { b.style.background="#fff"; b.style.color="#000"; b.style.border="2px solid #fff"; }
+        else         { b.style.background="#1a1a1a"; b.style.color="#888"; b.style.border="2px solid #2a2a2a"; }
+      });
+    };
+
+    window.creerTournoi = async () => {
+      const nom = $("nom").value.trim() || "Tournoi Cornhole";
+      const id  = uid();
+      await set(ref(db, `tournois/${id}`), {
+        nom, format: fmt,
+        cree: Date.now(),
+        statut: "en_cours",
+        matchs: {}
+      });
+      tournoiId = id;
+      localStorage.setItem("cornhole_admin_id", id);
+      loadTournoi();
+    };
+
+    // ── Charger tournoi existant ──
+    function loadTournoi() {
+      onValue(ref(db, `tournois/${tournoiId}`), snap => {
+        if (!snap.exists()) { tournoiId = null; localStorage.removeItem("cornhole_admin_id"); renderSetup(); return; }
+        tournoi = snap.val();
+        renderTournoi();
+      });
+    }
+
+    function renderTournoi() {
+      const matchs = tournoi.matchs ? Object.entries(tournoi.matchs) : [];
+      const enCours = matchs.filter(([,m]) => m.statut !== "termine");
+      const termines = matchs.filter(([,m]) => m.statut === "termine");
+
+      $("main").innerHTML = `
+        <div style="background:linear-gradient(135deg,#f4a100,#f77f00);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:11px;letter-spacing:2px;color:rgba(0,0,0,.6);">TOURNOI EN COURS</div>
+          <div style="font-size:22px;font-weight:900;color:#000;">${tournoi.nom}</div>
+          <div style="font-size:12px;color:rgba(0,0,0,.5);margin-top:2px;">${matchs.length} match${matchs.length>1?"s":""} · ${tournoi.format}</div>
+        </div>
+
+        <!-- Liens TV -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <a href="cornhole-scoreboard.html?t=${tournoiId}" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;">
+            <div style="font-size:18px;">📺</div>
+            <div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">SCOREBOARD</div>
+          </a>
+          <a href="cornhole-classement.html?t=${tournoiId}" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;">
+            <div style="font-size:18px;">🏆</div>
+            <div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">CLASSEMENT</div>
+          </a>
+          <div onclick="nouveauTournoi()" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;cursor:pointer;">
+            <div style="font-size:18px;">➕</div>
+            <div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">NOUVEAU</div>
+          </div>
+        </div>
+
+        <!-- Ajouter match -->
+        <div style="background:#111;border-radius:14px;padding:16px;border:1px solid #1e1e1e;margin-bottom:14px;">
+          <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU MATCH</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="teamA" placeholder="Équipe A" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;"/>
+            <input id="teamB" placeholder="Équipe B" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;"/>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <select id="terrain" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-family:'Barlow Condensed',sans-serif;font-size:13px;">
+              <option value="">Terrain (optionnel)</option>
+              ${[1,2,3,4,5,6,7,8].map(n=>`<option value="Terrain ${n}">Terrain ${n}</option>`).join("")}
+            </select>
+            <select id="winScore" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-family:'Barlow Condensed',sans-serif;font-size:13px;">
+              <option value="21">21 pts</option>
+              <option value="15">15 pts</option>
+              <option value="11">11 pts</option>
+            </select>
+          </div>
+          <button onclick="ajouterMatch()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;cursor:pointer;letter-spacing:1px;">+ Créer le Match & QR Codes</button>
+        </div>
+
+        <!-- Matchs en cours -->
+        <div id="matchs-en-cours">
+          <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">MATCHS EN COURS (${enCours.length})</div>
+          ${enCours.length === 0 ? `<div style="text-align:center;color:#333;padding:20px;font-size:14px;">Aucun match en cours</div>` : ""}
+          ${enCours.map(([id, m]) => renderMatchCard(id, m)).join("")}
+        </div>
+
+        ${termines.length > 0 ? `
+        <div style="margin-top:14px;">
+          <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">TERMINÉS (${termines.length})</div>
+          ${termines.map(([id, m]) => renderMatchCardTermine(id, m)).join("")}
+        </div>` : ""}
+      `;
+
+      // Générer QR codes pour matchs existants
+      matchs.forEach(([id, m]) => {
+        if (m.statut !== "termine") {
+          genQR(`qr-a-${id}`, `${baseUrl()}cornhole-equipe.html?t=${tournoiId}&m=${id}&e=a`);
+          genQR(`qr-b-${id}`, `${baseUrl()}cornhole-equipe.html?t=${tournoiId}&m=${id}&e=b`);
+        }
+      });
+    }
+
+    function renderMatchCard(id, m) {
+      const total = m.manches || 0;
+      return `
+        <div style="background:#111;border-radius:13px;padding:14px;margin-bottom:10px;border:1px solid #1e1e1e;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div>
+              <div style="font-size:16px;font-weight:900;">${m.equipeA} <span style="color:#555;">vs</span> ${m.equipeB}</div>
+              ${m.terrain ? `<div style="font-size:11px;color:#555;letter-spacing:1px;">${m.terrain}</div>` : ""}
+            </div>
+            <div style="text-align:right;">
+              <span style="font-size:28px;font-weight:900;color:#e63946;">${m.scoreA||0}</span>
+              <span style="color:#333;margin:0 4px;">–</span>
+              <span style="font-size:28px;font-weight:900;color:#1d6fa4;">${m.scoreB||0}</span>
+            </div>
+          </div>
+
+          <!-- Statut manche courante -->
+          ${renderStatutManche(m)}
+
+          <!-- QR Codes -->
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <div style="flex:1;background:#0a0a0a;border-radius:10px;padding:10px;text-align:center;border:1px solid #1e1e1e;">
+              <div style="font-size:10px;color:#e63946;letter-spacing:1px;margin-bottom:6px;font-weight:700;">${m.equipeA}</div>
+              <div id="qr-a-${id}" style="display:flex;justify-content:center;"></div>
+              <div style="font-size:9px;color:#444;margin-top:4px;">Scanner pour jouer</div>
+            </div>
+            <div style="flex:1;background:#0a0a0a;border-radius:10px;padding:10px;text-align:center;border:1px solid #1e1e1e;">
+              <div style="font-size:10px;color:#1d6fa4;letter-spacing:1px;margin-bottom:6px;font-weight:700;">${m.equipeB}</div>
+              <div id="qr-b-${id}" style="display:flex;justify-content:center;"></div>
+              <div style="font-size:9px;color:#444;margin-top:4px;">Scanner pour jouer</div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div style="display:flex;gap:6px;margin-top:10px;">
+            <button onclick="terminerMatch('${id}')" style="flex:1;padding:8px;border-radius:8px;background:#1a1a1a;border:1px solid #333;color:#e63946;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">✓ Terminer</button>
+            <button onclick="supprimerMatch('${id}')" style="padding:8px 12px;border-radius:8px;background:#1a1a1a;border:1px solid #333;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:12px;cursor:pointer;">🗑</button>
+          </div>
+        </div>`;
+    }
+
+    function renderStatutManche(m) {
+      const mc = m.manche_courante;
+      if (!mc) return `<div style="font-size:11px;color:#555;text-align:center;padding:4px 0;">En attente de la 1ère manche</div>`;
+
+      const soumisA = mc.sacs_A && mc.sacs_A.soumis;
+      const soumisB = mc.sacs_B && mc.sacs_B.soumis;
+      const confA = mc.confirmation_A;
+      const confB = mc.confirmation_B;
+
+      return `
+        <div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;font-size:11px;">
+          <div style="display:flex;justify-content:space-between;color:#555;margin-bottom:4px;">
+            <span>Manche ${m.round||1}</span>
+            <span style="color:${soumisA&&soumisB?"#2e7d32":"#f4a100"}">${soumisA&&soumisB?"En attente de validation":"Saisie en cours..."}</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <div style="flex:1;text-align:center;padding:4px;background:#111;border-radius:6px;">
+              <div style="font-size:9px;color:#555;margin-bottom:2px;">${m.equipeA}</div>
+              <div style="font-size:13px;font-weight:700;color:${soumisA?"#fff":"#444"}">${soumisA?"✓ Soumis":"En attente"}</div>
+              ${confA !== null && confA !== undefined ? `<div style="font-size:10px;color:${confA?"#2e7d32":"#e63946"}">${confA?"✅ Validé":"❌ Contesté"}</div>` : ""}
+            </div>
+            <div style="flex:1;text-align:center;padding:4px;background:#111;border-radius:6px;">
+              <div style="font-size:9px;color:#555;margin-bottom:2px;">${m.equipeB}</div>
+              <div style="font-size:13px;font-weight:700;color:${soumisB?"#fff":"#444"}">${soumisB?"✓ Soumis":"En attente"}</div>
+              ${confB !== null && confB !== undefined ? `<div style="font-size:10px;color:${confB?"#2e7d32":"#e63946"}">${confB?"✅ Validé":"❌ Contesté"}</div>` : ""}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderMatchCardTermine(id, m) {
+      const winnerName = (m.scoreA||0) >= (m.winScore||21) ? m.equipeA : m.equipeB;
+      return `
+        <div style="background:#0d0d0d;border-radius:11px;padding:12px;margin-bottom:8px;border:1px solid #1a1a1a;opacity:.7;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:14px;font-weight:700;">${m.equipeA} vs ${m.equipeB}</div>
+              <div style="font-size:11px;color:#f4a100;margin-top:2px;">🏆 ${winnerName}</div>
+            </div>
+            <div style="font-size:22px;font-weight:900;">
+              <span style="color:#e63946;">${m.scoreA||0}</span>
+              <span style="color:#333;margin:0 4px;">–</span>
+              <span style="color:#1d6fa4;">${m.scoreB||0}</span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function genQR(containerId, url) {
+      const container = document.getElementById(containerId);
+      if (!container || container.childNodes.length > 0) return;
+      new QRCode(container, { text: url, width: 90, height: 90, colorDark: "#ffffff", colorLight: "#0a0a0a" });
+    }
+
+    window.ajouterMatch = async () => {
+      const nomA = $("teamA").value.trim();
+      const nomB = $("teamB").value.trim();
+      if (!nomA || !nomB) { alert("Entre les noms des deux équipes !"); return; }
+      const terrain  = $("terrain").value;
+      const winScore = parseInt($("winScore").value) || 21;
+      const matchRef = push(ref(db, `tournois/${tournoiId}/matchs`));
+      await set(matchRef, {
+        equipeA: nomA, equipeB: nomB,
+        scoreA: 0, scoreB: 0,
+        winScore, terrain,
+        round: 1, statut: "en_cours",
+        cree: Date.now(),
+        manche_courante: null
+      });
+      $("teamA").value = ""; $("teamB").value = "";
+    };
+
+    window.terminerMatch = async id => {
+      if (!confirm("Terminer ce match ?")) return;
+      await update(ref(db, `tournois/${tournoiId}/matchs/${id}`), { statut: "termine" });
+    };
+
+    window.supprimerMatch = async id => {
+      if (!confirm("Supprimer ce match ?")) return;
+      await remove(ref(db, `tournois/${tournoiId}/matchs/${id}`));
+    };
+
+    window.nouveauTournoi = () => {
+      if (!confirm("Créer un nouveau tournoi ? Le tournoi actuel reste accessible via son ID.")) return;
+      tournoiId = null;
+      localStorage.removeItem("cornhole_admin_id");
+      renderSetup();
+    };
+
+    renderApp();
+  </script>
+</head>
+<body></body>
+</html>

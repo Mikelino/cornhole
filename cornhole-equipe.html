@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <title>Cornhole — Équipe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    body{background:#0a0a0a;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overscroll-behavior:none;}
+    button,input{font-family:'Barlow Condensed',sans-serif;outline:none;}
+    .btn-bag{width:58px;height:58px;border-radius:12px;font-size:22px;font-weight:900;cursor:pointer;transition:all .15s;border:2px solid #333;background:#1a1a1a;color:#888;}
+    .btn-bag.selected{color:#fff;border-color:var(--team-color);}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+    @keyframes slide-up{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .slide-up{animation:slide-up .3s ease forwards;}
+  </style>
+</head>
+<body>
+<div id="root" style="max-width:480px;margin:0 auto;"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db  = getDatabase(app);
+
+  // ── Params URL ──
+  const params   = new URLSearchParams(location.search);
+  const tournoiId = params.get("t");
+  const matchId   = params.get("m");
+  const equipe    = params.get("e"); // "a" ou "b"
+
+  if (!tournoiId || !matchId || !equipe) {
+    document.getElementById("root").innerHTML = `<div style="text-align:center;padding:40px;color:#e63946;">❌ Lien invalide.<br>Scanne le QR code depuis l'admin.</div>`;
+    throw new Error("Params manquants");
+  }
+
+  const matchRef = ref(db, `tournois/${tournoiId}/matchs/${matchId}`);
+  let match = null;
+  let phase = "attente"; // attente | saisie | confirmation | valide | termine
+
+  // Entry locale
+  let entrée = { trou: 0, plateau: 0 };
+
+  // ── Couleurs selon équipe ──
+  const teamColor = equipe === "a" ? "#e63946" : "#1d6fa4";
+  const teamGrad  = equipe === "a"
+    ? "linear-gradient(145deg,#7f0000,#e63946)"
+    : "linear-gradient(145deg,#0d47a1,#1d6fa4)";
+  document.documentElement.style.setProperty("--team-color", teamColor);
+
+  // ── Écoute Firebase ──
+  onValue(matchRef, snap => {
+    if (!snap.exists()) { render404(); return; }
+    match = snap.val();
+    detectPhase();
+    render();
+  });
+
+  function detectPhase() {
+    if (match.statut === "termine") { phase = "termine"; return; }
+    const mc = match.manche_courante;
+    if (!mc) { phase = "saisie"; return; }
+
+    const mesSacs   = equipe === "a" ? mc.sacs_A : mc.sacs_B;
+    const leursSacs = equipe === "a" ? mc.sacs_B : mc.sacs_A;
+    const maConf    = equipe === "a" ? mc.confirmation_A : mc.confirmation_B;
+
+    if (!mesSacs || !mesSacs.soumis) { phase = "saisie"; return; }
+    if (!leursSacs || !leursSacs.soumis) { phase = "attente_adversaire"; return; }
+    if (maConf === null || maConf === undefined) { phase = "confirmation"; return; }
+    if (maConf === false) { phase = "conteste"; return; }
+    phase = "valide";
+  }
+
+  // ── Render principal ──
+  function render() {
+    const root = document.getElementById("root");
+    switch (phase) {
+      case "saisie":            root.innerHTML = renderSaisie(); break;
+      case "attente_adversaire": root.innerHTML = renderAttente(); break;
+      case "confirmation":      root.innerHTML = renderConfirmation(); break;
+      case "conteste":          root.innerHTML = renderConteste(); break;
+      case "valide":            root.innerHTML = renderValide(); break;
+      case "termine":           root.innerHTML = renderTermine(); break;
+      default:                  root.innerHTML = renderSaisie();
+    }
+    attachEvents();
+  }
+
+  function monNom()  { return equipe === "a" ? match.equipeA : match.equipeB; }
+  function leurNom() { return equipe === "a" ? match.equipeB : match.equipeA; }
+  function monScore()  { return equipe === "a" ? (match.scoreA||0) : (match.scoreB||0); }
+  function leurScore() { return equipe === "a" ? (match.scoreB||0) : (match.scoreA||0); }
+
+  function header() {
+    return `
+      <div style="background:${teamGrad};padding:16px;border-radius:0 0 20px 20px;margin-bottom:16px;">
+        <div style="font-size:9px;letter-spacing:3px;color:rgba(255,255,255,.6);">CORNHOLE · MANCHE ${match.round||1}</div>
+        <div style="font-size:22px;font-weight:900;margin:2px 0;">${monNom()}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+          <div>
+            <div style="font-size:64px;font-weight:900;line-height:1;">${monScore()}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);">/ ${match.winScore||21} pts</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;color:rgba(255,255,255,.5);">${leurNom()}</div>
+            <div style="font-size:36px;font-weight:900;color:rgba(255,255,255,.7);">${leurScore()}</div>
+          </div>
+        </div>
+        <div style="background:rgba(0,0,0,.2);border-radius:6px;height:5px;margin-top:8px;">
+          <div style="width:${Math.min((monScore()/(match.winScore||21))*100,100)}%;background:#fff;border-radius:6px;height:5px;opacity:.8;transition:width .5s;"></div>
+        </div>
+      </div>`;
+  }
+
+  function bagSelector(label, key, pts, color) {
+    const val = entrée[key];
+    const btns = [0,1,2,3,4].map(n => `
+      <button class="btn-bag ${val===n?"selected":""}" data-key="${key}" data-val="${n}"
+        style="${val===n?`background:${color};border-color:${color};`:""}">
+        ${n}
+      </button>`).join("");
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:7px;letter-spacing:1px;text-transform:uppercase;">
+          ${label} <span style="color:${color};font-weight:700;">(+${pts}pt${pts>1?"s":""})</span>
+        </div>
+        <div style="display:flex;gap:8px;">${btns}</div>
+      </div>`;
+  }
+
+  function renderSaisie() {
+    const pts = entrée.trou*3 + entrée.plateau;
+    return `
+      ${header()}
+      <div style="padding:0 16px 24px;" class="slide-up">
+        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:14px;">TES SACS — MANCHE ${match.round||1}</div>
+
+        ${bagSelector("Bags In Hole", "trou", 3, teamColor)}
+        ${bagSelector("Bags On Board", "plateau", 1, teamColor)}
+
+        <!-- Preview score -->
+        <div style="background:#111;border-radius:12px;padding:12px 14px;margin-bottom:16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:12px;color:#555;letter-spacing:1px;">POINTS CETTE MANCHE</div>
+          <div style="font-size:32px;font-weight:900;color:${teamColor};">${pts > 0 ? `+${pts}` : "0"}</div>
+        </div>
+
+        <button id="btn-soumettre" style="width:100%;padding:16px;border-radius:13px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:19px;font-weight:900;cursor:pointer;letter-spacing:1px;opacity:${pts>=0?1:.5};">
+          ✓ Soumettre mes sacs
+        </button>
+      </div>`;
+  }
+
+  function renderAttente() {
+    const mc = match.manche_courante;
+    const mesSacs = equipe === "a" ? mc.sacs_A : mc.sacs_B;
+    const mesPts = mesSacs ? mesSacs.trou*3 + mesSacs.plateau : 0;
+    return `
+      ${header()}
+      <div style="padding:0 16px 24px;text-align:center;" class="slide-up">
+        <div style="font-size:48px;margin:30px 0 10px;animation:pulse 1.5s ease-in-out infinite;">⏳</div>
+        <div style="font-size:22px;font-weight:900;margin-bottom:6px;">En attente de ${leurNom()}</div>
+        <div style="font-size:14px;color:#555;margin-bottom:30px;">Ils saisissent leurs sacs...</div>
+        <div style="background:#111;border-radius:12px;padding:14px;border:1px solid #1e1e1e;">
+          <div style="font-size:11px;color:#555;margin-bottom:4px;">TES SACS SOUMIS</div>
+          <div style="font-size:28px;font-weight:900;color:${teamColor};">+${mesPts} pts</div>
+          <div style="font-size:12px;color:#aaa;margin-top:4px;">${mesSacs?.trou||0} trou · ${mesSacs?.plateau||0} plateau</div>
+        </div>
+      </div>`;
+  }
+
+  function renderConfirmation() {
+    const mc = match.manche_courante;
+    const leursSacs = equipe === "a" ? mc.sacs_B : mc.sacs_A;
+    const leursPts  = leursSacs ? leursSacs.trou*3 + leursSacs.plateau : 0;
+    const mesSacs   = equipe === "a" ? mc.sacs_A : mc.sacs_B;
+    const mesPts    = mesSacs ? mesSacs.trou*3 + mesSacs.plateau : 0;
+
+    return `
+      ${header()}
+      <div style="padding:0 16px 24px;" class="slide-up">
+        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:14px;">CONFIRME LES SACS DE ${leurNom().toUpperCase()}</div>
+
+        <div style="background:#111;border-radius:14px;padding:16px;border:1px solid #2a2a2a;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:11px;color:#555;margin-bottom:4px;">TROU (×3pts)</div>
+              <div style="font-size:48px;font-weight:900;color:#fff;">${leursSacs?.trou||0}</div>
+            </div>
+            <div style="width:1px;background:#222;"></div>
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:11px;color:#555;margin-bottom:4px;">PLATEAU (×1pt)</div>
+              <div style="font-size:48px;font-weight:900;color:#fff;">${leursSacs?.plateau||0}</div>
+            </div>
+          </div>
+          <div style="background:#0a0a0a;border-radius:8px;padding:10px;text-align:center;border:1px solid #1e1e1e;">
+            <div style="font-size:11px;color:#555;">TOTAL ${leurNom().toUpperCase()}</div>
+            <div style="font-size:32px;font-weight:900;color:${equipe==="a"?"#1d6fa4":"#e63946"};">${leursPts > 0 ? `+${leursPts}` : "0"} pts</div>
+          </div>
+        </div>
+
+        <div style="background:#0d0d0d;border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;border:1px solid #1a1a1a;">
+          <div style="font-size:12px;color:#555;">Tes sacs soumis</div>
+          <div style="font-size:18px;font-weight:900;color:${teamColor};">+${mesPts} pts</div>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+          <button id="btn-contester" style="flex:1;padding:14px;border-radius:12px;background:#1a1a1a;border:2px solid #e63946;color:#e63946;font-size:17px;font-weight:900;cursor:pointer;letter-spacing:1px;">❌ Contester</button>
+          <button id="btn-confirmer" style="flex:2;padding:14px;border-radius:12px;background:linear-gradient(135deg,#2e7d32,#4caf50);border:none;color:#fff;font-size:17px;font-weight:900;cursor:pointer;letter-spacing:1px;">✅ Confirmer</button>
+        </div>
+      </div>`;
+  }
+
+  function renderConteste() {
+    return `
+      ${header()}
+      <div style="padding:0 16px 24px;text-align:center;" class="slide-up">
+        <div style="font-size:52px;margin:30px 0 10px;">⚠️</div>
+        <div style="font-size:24px;font-weight:900;color:#e63946;margin-bottom:8px;">Score contesté</div>
+        <div style="font-size:14px;color:#555;margin-bottom:24px;">L'arbitre ou les équipes doivent se mettre d'accord.</div>
+        <div style="background:#111;border-radius:12px;padding:14px;border:1px solid #e6394630;">
+          <div style="font-size:13px;color:#aaa;">Appelez un arbitre ou ressaisissez les scores.</div>
+        </div>
+        <button id="btn-ressaisir" style="width:100%;margin-top:16px;padding:14px;border-radius:12px;background:#1a1a1a;border:1px solid #333;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">↩ Ressaisir mes sacs</button>
+      </div>`;
+  }
+
+  function renderValide() {
+    const mc = match.manche_courante;
+    const mesPts   = equipe==="a" ? (mc?.sacs_A?.trou||0)*3+(mc?.sacs_A?.plateau||0) : (mc?.sacs_B?.trou||0)*3+(mc?.sacs_B?.plateau||0);
+    const leursPts = equipe==="a" ? (mc?.sacs_B?.trou||0)*3+(mc?.sacs_B?.plateau||0) : (mc?.sacs_A?.trou||0)*3+(mc?.sacs_A?.plateau||0);
+    return `
+      ${header()}
+      <div style="padding:0 16px 24px;text-align:center;" class="slide-up">
+        <div style="font-size:52px;margin:20px 0 8px;">✅</div>
+        <div style="font-size:22px;font-weight:900;color:#4caf50;margin-bottom:6px;">Manche validée !</div>
+        <div style="font-size:14px;color:#555;margin-bottom:24px;">En attente de la prochaine manche...</div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;background:#111;border-radius:12px;padding:12px;border:1px solid #1e1e1e;">
+            <div style="font-size:10px;color:#555;margin-bottom:4px;">TOI</div>
+            <div style="font-size:28px;font-weight:900;color:${teamColor};">+${mesPts}</div>
+          </div>
+          <div style="flex:1;background:#111;border-radius:12px;padding:12px;border:1px solid #1e1e1e;">
+            <div style="font-size:10px;color:#555;margin-bottom:4px;">${leurNom()}</div>
+            <div style="font-size:28px;font-weight:900;color:${equipe==="a"?"#1d6fa4":"#e63946"};">+${leursPts}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderTermine() {
+    const jaGagne = equipe==="a" ? (match.scoreA||0)>=(match.winScore||21) : (match.scoreB||0)>=(match.winScore||21);
+    return `
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+        <div style="font-size:72px;margin-bottom:12px;">${jaGagne?"🏆":"😤"}</div>
+        <div style="font-size:38px;font-weight:900;color:${jaGagne?teamColor:"#555"};margin-bottom:6px;">${jaGagne?"VICTOIRE !":"Défaite"}</div>
+        <div style="font-size:48px;font-weight:900;margin:12px 0;">
+          <span style="color:#e63946;">${match.scoreA||0}</span>
+          <span style="color:#333;margin:0 8px;">–</span>
+          <span style="color:#1d6fa4;">${match.scoreB||0}</span>
+        </div>
+        <div style="font-size:16px;color:#555;">${match.equipeA} vs ${match.equipeB}</div>
+      </div>`;
+  }
+
+  function render404() {
+    document.getElementById("root").innerHTML = `<div style="text-align:center;padding:40px;color:#e63946;">❌ Match introuvable.</div>`;
+  }
+
+  // ── Événements ──
+  function attachEvents() {
+    // Boutons sacs
+    document.querySelectorAll(".btn-bag").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.key;
+        const val = parseInt(btn.dataset.val);
+        entrée[key] = val;
+        render();
+      });
+    });
+
+    // Soumettre
+    const btnS = document.getElementById("btn-soumettre");
+    if (btnS) btnS.addEventListener("click", soumettreSacs);
+
+    // Confirmer / Contester
+    const btnC = document.getElementById("btn-confirmer");
+    if (btnC) btnC.addEventListener("click", () => confirmer(true));
+    const btnX = document.getElementById("btn-contester");
+    if (btnX) btnX.addEventListener("click", () => confirmer(false));
+
+    // Ressaisir
+    const btnR = document.getElementById("btn-ressaisir");
+    if (btnR) btnR.addEventListener("click", ressaisir);
+  }
+
+  async function soumettreSacs() {
+    const sacKey  = equipe === "a" ? "sacs_A" : "sacs_B";
+    const updates = {};
+
+    // Initialiser manche_courante si nécessaire
+    const snap = await get(matchRef);
+    const m = snap.val();
+    if (!m.manche_courante) {
+      updates[`manche_courante/round`] = m.round || 1;
+      updates[`manche_courante/confirmation_A`] = null;
+      updates[`manche_courante/confirmation_B`] = null;
+    }
+    updates[`manche_courante/${sacKey}`] = { trou: entrée.trou, plateau: entrée.plateau, soumis: true };
+    await update(matchRef, updates);
+    entrée = { trou: 0, plateau: 0 };
+  }
+
+  async function confirmer(accord) {
+    const confKey = equipe === "a" ? "confirmation_A" : "confirmation_B";
+    await update(ref(db, `tournois/${tournoiId}/matchs/${matchId}/manche_courante`), { [confKey]: accord });
+
+    if (accord) {
+      // Vérifier si l'autre a aussi confirmé
+      const snap = await get(matchRef);
+      const mc = snap.val().manche_courante;
+      const autreConf = equipe === "a" ? mc.confirmation_B : mc.confirmation_A;
+      if (autreConf === true) await validerManche(snap.val(), mc);
+    }
+  }
+
+  async function validerManche(m, mc) {
+    const ptsA = (mc.sacs_A?.trou||0)*3 + (mc.sacs_A?.plateau||0);
+    const ptsB = (mc.sacs_B?.trou||0)*3 + (mc.sacs_B?.plateau||0);
+    const newScoreA = (m.scoreA||0) + ptsA;
+    const newScoreB = (m.scoreB||0) + ptsB;
+    const newRound  = (m.round||1) + 1;
+    const winScore  = m.winScore || 21;
+
+    let statut = "en_cours";
+    if (newScoreA >= winScore || newScoreB >= winScore) statut = "termine";
+
+    await update(matchRef, {
+      scoreA: newScoreA,
+      scoreB: newScoreB,
+      round: newRound,
+      statut,
+      manche_courante: null
+    });
+  }
+
+  async function ressaisir() {
+    const sacKey = equipe === "a" ? "sacs_A" : "sacs_B";
+    await update(ref(db, `tournois/${tournoiId}/matchs/${matchId}/manche_courante`), {
+      [sacKey]: null,
+      confirmation_A: null,
+      confirmation_B: null
+    });
+    entrée = { trou: 0, plateau: 0 };
+  }
+</script>
+</body>
+</html>

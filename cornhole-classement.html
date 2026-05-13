@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cornhole — Classement</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#050505;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overflow:hidden;}
+    @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+    @keyframes fade-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes champion-glow{0%,100%{box-shadow:0 0 40px #f4a10066}50%{box-shadow:0 0 80px #f4a100aa,0 0 120px #f4a10033}}
+    @keyframes rank1-shine{0%,100%{background-position:200% center}50%{background-position:-200% center}}
+    .fade-in{animation:fade-in .4s ease forwards;}
+    .rank-1{animation:champion-glow 2s ease-in-out infinite;}
+  </style>
+</head>
+<body>
+<div id="root" style="min-height:100vh;display:flex;flex-direction:column;"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db  = getDatabase(app);
+
+  const params    = new URLSearchParams(location.search);
+  const tournoiId = params.get("t");
+  let   tournoi   = null;
+
+  if (!tournoiId) {
+    document.getElementById("root").innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;">
+        <div style="font-size:32px;">🏆</div>
+        <div style="font-size:24px;font-weight:700;color:#555;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
+      </div>`;
+  } else {
+    onValue(ref(db, `tournois/${tournoiId}`), snap => {
+      if (!snap.exists()) return;
+      tournoi = snap.val();
+      render();
+    });
+  }
+
+  function render() {
+    if (!tournoi) return;
+    const matchs = Object.entries(tournoi.matchs || {});
+    const enCours = matchs.filter(([,m]) => m.statut !== "termine");
+    const termines = matchs.filter(([,m]) => m.statut === "termine");
+
+    // Calculer classement
+    const standings = calculerClassement(matchs);
+    const champion  = termines.length > 0 && enCours.length === 0 ? standings[0] : null;
+
+    document.getElementById("root").innerHTML = `
+      <div style="flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 50px);">
+
+        <!-- Header -->
+        <div style="padding:20px 40px 16px;display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #111;">
+          <div>
+            <div style="font-size:12px;letter-spacing:4px;color:#444;">CORNHOLE SCOREKEEPER</div>
+            <div style="font-size:32px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:#444;letter-spacing:2px;">MATCHS</div>
+            <div style="font-size:18px;font-weight:700;color:#aaa;">${termines.length}/${matchs.length} terminés</div>
+          </div>
+        </div>
+
+        <!-- Champion banner si tournoi terminé -->
+        ${champion ? `
+        <div style="margin:16px 40px;background:linear-gradient(135deg,#f4a100,#f77f00);border-radius:16px;padding:16px 24px;display:flex;align-items:center;gap:16px;" class="rank-1">
+          <div style="font-size:48px;">🏆</div>
+          <div>
+            <div style="font-size:12px;letter-spacing:3px;color:rgba(0,0,0,.5);">CHAMPION</div>
+            <div style="font-size:36px;font-weight:900;color:#000;">${champion.nom}</div>
+          </div>
+          <div style="margin-left:auto;text-align:right;">
+            <div style="font-size:12px;color:rgba(0,0,0,.5);">${champion.v}V · ${champion.d}D</div>
+            <div style="font-size:28px;font-weight:900;color:#000;">${champion.pts} pts</div>
+          </div>
+        </div>` : ""}
+
+        <!-- Corps principal : classement + matchs en cours -->
+        <div style="flex:1;display:flex;gap:20px;padding:16px 40px 0;overflow:hidden;">
+
+          <!-- Classement général -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:0;">
+            <div style="font-size:11px;letter-spacing:3px;color:#444;margin-bottom:12px;">CLASSEMENT GÉNÉRAL</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+              ${standings.map((s, i) => renderRangée(s, i)).join("")}
+            </div>
+          </div>
+
+          <!-- Séparateur vertical -->
+          <div style="width:1px;background:#111;flex-shrink:0;"></div>
+
+          <!-- Matchs en cours / récents -->
+          <div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;">
+            <div style="font-size:11px;letter-spacing:3px;color:#444;margin-bottom:12px;">
+              ${enCours.length > 0 ? "MATCHS EN COURS" : "DERNIERS MATCHS"}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;">
+              ${enCours.length > 0
+                ? enCours.map(([id,m]) => renderMatchLive(id, m)).join("")
+                : termines.slice(-6).reverse().map(([id,m]) => renderMatchTermine(id, m)).join("")
+              }
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    renderSponsors();
+  }
+
+  function renderRangée(s, i) {
+    const medals = ["🥇","🥈","🥉"];
+    const bgColors = [
+      "linear-gradient(135deg,#f4a10015,#f77f0010)",
+      "linear-gradient(135deg,#aaaaaa10,#88888808)",
+      "linear-gradient(135deg,#cd7f3210,#a0522d08)",
+    ];
+    const borderColors = ["#f4a10040","#aaaaaa25","#cd7f3225","#1a1a1a"];
+    const pct = s.j > 0 ? Math.round((s.v / s.j) * 100) : 0;
+    const isFirst = i === 0;
+
+    return `
+      <div style="background:${bgColors[i]||"transparent"};border-radius:14px;padding:14px 18px;border:1px solid ${borderColors[Math.min(i,3)]};display:flex;align-items:center;gap:14px;${isFirst?"animation:champion-glow 2.5s ease-in-out infinite;":""}" class="fade-in">
+        <!-- Rang -->
+        <div style="width:44px;text-align:center;flex-shrink:0;">
+          ${i < 3
+            ? `<div style="font-size:32px;">${medals[i]}</div>`
+            : `<div style="font-size:28px;font-weight:900;color:#333;">${i+1}</div>`
+          }
+        </div>
+
+        <!-- Nom + barre -->
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:22px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isFirst?"#f4a100":"#fff"};">${s.nom}</div>
+          <div style="background:#0a0a0a;border-radius:4px;height:4px;margin-top:6px;overflow:hidden;">
+            <div style="width:${pct}%;background:${isFirst?"#f4a100":"#555"};height:4px;border-radius:4px;transition:width .8s ease;"></div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div style="display:flex;gap:16px;flex-shrink:0;text-align:center;">
+          <div>
+            <div style="font-size:28px;font-weight:900;color:#2e7d32;">${s.v}</div>
+            <div style="font-size:10px;color:#444;letter-spacing:1px;">VICTOIRES</div>
+          </div>
+          <div>
+            <div style="font-size:28px;font-weight:900;color:#e63946;">${s.d}</div>
+            <div style="font-size:10px;color:#444;letter-spacing:1px;">DÉFAITES</div>
+          </div>
+          <div>
+            <div style="font-size:28px;font-weight:900;color:#f4a100;">${s.pts}</div>
+            <div style="font-size:10px;color:#444;letter-spacing:1px;">POINTS</div>
+          </div>
+          <div>
+            <div style="font-size:28px;font-weight:900;color:${s.diff>=0?"#4caf50":"#e63946"};">${s.diff>=0?"+":""}${s.diff}</div>
+            <div style="font-size:10px;color:#444;letter-spacing:1px;">DIFF</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderMatchLive(id, m) {
+    const mc = m.manche_courante;
+    const saisie = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
+    const validation = mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis;
+    return `
+      <div style="background:#0d0d0d;border-radius:12px;padding:14px;border:1px solid #1a1a1a;" class="fade-in">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          ${m.terrain ? `<div style="font-size:10px;color:#444;letter-spacing:1px;">${m.terrain}</div>` : `<div></div>`}
+          <div style="font-size:10px;color:${saisie?"#f4a100":validation?"#2e7d32":"#444"};letter-spacing:1px;">
+            ${saisie?"⚡ EN SAISIE":validation?"🔄 VALIDATION":"R${m.round||1}"}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:16px;font-weight:800;">${m.equipeA}</div>
+            <div style="font-size:40px;font-weight:900;color:#e63946;line-height:1;">${m.scoreA||0}</div>
+          </div>
+          <div style="font-size:20px;color:#222;font-weight:900;">VS</div>
+          <div style="flex:1;text-align:right;">
+            <div style="font-size:16px;font-weight:800;">${m.equipeB}</div>
+            <div style="font-size:40px;font-weight:900;color:#1d6fa4;line-height:1;">${m.scoreB||0}</div>
+          </div>
+        </div>
+        <div style="background:#111;border-radius:4px;height:4px;margin-top:8px;overflow:hidden;display:flex;">
+          <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#e63946;transition:width .8s;"></div>
+          <div style="flex:1;background:#0a0a0a;"></div>
+          <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#1d6fa4;transition:width .8s;"></div>
+        </div>
+      </div>`;
+  }
+
+  function renderMatchTermine(id, m) {
+    const winA = (m.scoreA||0) > (m.scoreB||0);
+    return `
+      <div style="background:#0a0a0a;border-radius:12px;padding:12px 14px;border:1px solid #111;opacity:.8;" class="fade-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:${winA?900:600};color:${winA?"#fff":"#555"};">${m.equipeA} ${winA?"🏆":""}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <span style="font-size:28px;font-weight:900;color:#e63946;">${m.scoreA||0}</span>
+            <span style="font-size:16px;color:#222;">–</span>
+            <span style="font-size:28px;font-weight:900;color:#1d6fa4;">${m.scoreB||0}</span>
+          </div>
+          <div style="flex:1;text-align:right;">
+            <div style="font-size:15px;font-weight:${!winA?900:600};color:${!winA?"#fff":"#555"};">${!winA?"🏆":""} ${m.equipeB}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function calculerClassement(matchs) {
+    const equipes = {};
+    matchs.forEach(([, m]) => {
+      [m.equipeA, m.equipeB].forEach(nom => {
+        if (!equipes[nom]) equipes[nom] = { nom, v:0, d:0, j:0, pts:0, diff:0 };
+      });
+      if (m.statut === "termine") {
+        const sA = m.scoreA||0, sB = m.scoreB||0;
+        if (sA > sB) {
+          equipes[m.equipeA].v++; equipes[m.equipeA].pts += 2;
+          equipes[m.equipeB].d++;
+        } else if (sB > sA) {
+          equipes[m.equipeB].v++; equipes[m.equipeB].pts += 2;
+          equipes[m.equipeA].d++;
+        } else {
+          equipes[m.equipeA].pts++; equipes[m.equipeB].pts++;
+        }
+        equipes[m.equipeA].j++; equipes[m.equipeB].j++;
+        equipes[m.equipeA].diff += sA - sB;
+        equipes[m.equipeB].diff += sB - sA;
+      }
+    });
+    return Object.values(equipes).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.v - a.v);
+  }
+
+  function renderSponsors() {
+    const sponsors = (tournoi.sponsors || []).filter(s => s.name);
+    if (!sponsors.length) return;
+    const ticker = document.createElement("div");
+    ticker.style.cssText = "height:50px;background:#0a0a0a;border-top:1px solid #111;display:flex;align-items:center;overflow:hidden;flex-shrink:0;";
+    const inner = document.createElement("div");
+    inner.style.cssText = `display:flex;animation:ticker ${sponsors.length*5}s linear infinite;width:max-content;`;
+    [...sponsors,...sponsors].forEach(s => {
+      const item = document.createElement("div");
+      item.style.cssText = "display:flex;align-items:center;gap:10px;padding:0 32px;border-right:1px solid #111;flex-shrink:0;";
+      if (s.logo) { const img = document.createElement("img"); img.src=s.logo; img.style.cssText="height:28px;width:auto;object-fit:contain;opacity:.6;"; item.appendChild(img); }
+      if (s.name) { const span = document.createElement("span"); span.style.cssText="font-size:15px;font-weight:700;color:#333;letter-spacing:2px;white-space:nowrap;"; span.textContent=s.name; item.appendChild(span); }
+      inner.appendChild(item);
+    });
+    ticker.appendChild(inner);
+    document.getElementById("root").appendChild(ticker);
+  }
+</script>
+</body>
+</html>

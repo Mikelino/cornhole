@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cornhole — Scoreboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#050505;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overflow:hidden;}
+    @keyframes score-pop{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
+    @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+    @keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse-border{0%,100%{opacity:.4}50%{opacity:1}}
+    .score-anim{animation:score-pop .4s ease}
+    .fade-in{animation:fade-in .5s ease forwards}
+  </style>
+</head>
+<body>
+<div id="root" style="min-height:100vh;display:flex;flex-direction:column;"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db  = getDatabase(app);
+
+  const params    = new URLSearchParams(location.search);
+  const tournoiId = params.get("t");
+  let   tournoi   = null;
+  let   prevScores = {};
+
+  if (!tournoiId) {
+    document.getElementById("root").innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;">
+        <div style="font-size:32px;">📺</div>
+        <div style="font-size:24px;font-weight:700;color:#555;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
+      </div>`;
+  } else {
+    onValue(ref(db, `tournois/${tournoiId}`), snap => {
+      if (!snap.exists()) return;
+      tournoi = snap.val();
+      render();
+    });
+  }
+
+  function render() {
+    if (!tournoi) return;
+    const matchs = Object.entries(tournoi.matchs || {}).filter(([,m]) => m.statut !== "termine");
+    const root = document.getElementById("root");
+
+    if (matchs.length === 0) {
+      root.innerHTML = renderIdle();
+      return;
+    }
+
+    if (matchs.length === 1) {
+      root.innerHTML = renderPleinEcran(matchs[0][0], matchs[0][1]);
+    } else if (matchs.length <= 4) {
+      root.innerHTML = renderGrille(matchs);
+    } else {
+      root.innerHTML = renderListe(matchs);
+    }
+
+    // Animer les scores changés
+    matchs.forEach(([id, m]) => {
+      const prev = prevScores[id] || { a: -1, b: -1 };
+      if (m.scoreA !== prev.a) animerScore(`score-a-${id}`);
+      if (m.scoreB !== prev.b) animerScore(`score-b-${id}`);
+      prevScores[id] = { a: m.scoreA||0, b: m.scoreB||0 };
+    });
+
+    // Sponsors ticker
+    renderSponsors();
+  }
+
+  function animerScore(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("score-anim");
+    void el.offsetWidth;
+    el.classList.add("score-anim");
+  }
+
+  // ── 1 match → plein écran ──
+  function renderPleinEcran(id, m) {
+    const mc = m.manche_courante;
+    const saisieEnCours = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
+    const attentConf    = mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis && (mc.confirmation_A === null || mc.confirmation_A === undefined || mc.confirmation_B === null || mc.confirmation_B === undefined);
+
+    return `
+      <div style="flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 60px);">
+
+        <!-- Header tournoi -->
+        <div style="padding:20px 40px 0;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:13px;letter-spacing:4px;color:#444;">CORNHOLE SCOREKEEPER</div>
+            <div style="font-size:22px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;color:#444;letter-spacing:2px;">MANCHE</div>
+            <div style="font-size:40px;font-weight:900;line-height:1;">${m.round||1}</div>
+          </div>
+        </div>
+
+        <!-- Scores principaux -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:0;padding:20px 40px;">
+
+          <!-- Équipe A -->
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#7f0000,#e63946);border-radius:24px;padding:40px 20px;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.05);"></div>
+            <div style="font-size:20px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.7);margin-bottom:8px;text-transform:uppercase;">${m.equipeA}</div>
+            <div id="score-a-${id}" style="font-size:160px;font-weight:900;line-height:.9;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,.5);">${m.scoreA||0}</div>
+            <div style="font-size:18px;color:rgba(255,255,255,.35);margin-top:8px;">/ ${m.winScore||21} pts</div>
+            <div style="width:80%;background:rgba(0,0,0,.3);border-radius:8px;height:8px;margin-top:16px;">
+              <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#fff;border-radius:8px;height:8px;opacity:.8;transition:width .8s ease;"></div>
+            </div>
+          </div>
+
+          <!-- Séparateur -->
+          <div style="padding:0 30px;text-align:center;flex-shrink:0;">
+            <div style="font-size:80px;font-weight:900;color:#222;">VS</div>
+            ${m.terrain ? `<div style="font-size:14px;color:#444;letter-spacing:2px;margin-top:4px;">${m.terrain}</div>` : ""}
+            <!-- Statut manche -->
+            <div style="margin-top:16px;">
+              ${saisieEnCours ? `<div style="font-size:13px;color:#f4a100;letter-spacing:2px;animation:pulse-border 1.5s ease-in-out infinite;">⚡ SAISIE EN COURS</div>` : ""}
+              ${attentConf   ? `<div style="font-size:13px;color:#2e7d32;letter-spacing:2px;animation:pulse-border 1.5s ease-in-out infinite;">🔄 VALIDATION...</div>` : ""}
+            </div>
+          </div>
+
+          <!-- Équipe B -->
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#0d47a1,#1d6fa4);border-radius:24px;padding:40px 20px;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-40px;left:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.05);"></div>
+            <div style="font-size:20px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.7);margin-bottom:8px;text-transform:uppercase;">${m.equipeB}</div>
+            <div id="score-b-${id}" style="font-size:160px;font-weight:900;line-height:.9;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,.5);">${m.scoreB||0}</div>
+            <div style="font-size:18px;color:rgba(255,255,255,.35);margin-top:8px;">/ ${m.winScore||21} pts</div>
+            <div style="width:80%;background:rgba(0,0,0,.3);border-radius:8px;height:8px;margin-top:16px;">
+              <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#fff;border-radius:8px;height:8px;opacity:.8;transition:width .8s ease;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Détail manche courante -->
+        ${mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis ? `
+        <div style="padding:0 40px 20px;display:flex;gap:12px;">
+          <div style="flex:1;background:#111;border-radius:12px;padding:12px 16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:12px;color:#555;letter-spacing:1px;">MANCHE EN COURS · ${m.equipeA}</div>
+            <div style="font-size:24px;font-weight:900;color:#e63946;">+${(mc.sacs_A?.trou||0)*3+(mc.sacs_A?.plateau||0)}</div>
+          </div>
+          <div style="flex:1;background:#111;border-radius:12px;padding:12px 16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:12px;color:#555;letter-spacing:1px;">MANCHE EN COURS · ${m.equipeB}</div>
+            <div style="font-size:24px;font-weight:900;color:#1d6fa4;">+${(mc.sacs_B?.trou||0)*3+(mc.sacs_B?.plateau||0)}</div>
+          </div>
+        </div>` : ""}
+      </div>`;
+  }
+
+  // ── 2-4 matchs → grille ──
+  function renderGrille(matchs) {
+    const cols = matchs.length === 2 ? 1 : 2;
+    return `
+      <div style="padding:16px 20px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-size:28px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
+          <div style="font-size:13px;color:#444;letter-spacing:2px;">${matchs.length} MATCHS EN COURS</div>
+        </div>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;padding:0 20px 16px;">
+        ${matchs.map(([id,m]) => renderCarteMatch(id, m)).join("")}
+      </div>`;
+  }
+
+  function renderCarteMatch(id, m) {
+    const mc = m.manche_courante;
+    const enSaisie = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
+    return `
+      <div style="background:#0d0d0d;border-radius:20px;padding:20px;border:1px solid #1a1a1a;display:flex;flex-direction:column;gap:12px;position:relative;" class="fade-in">
+        ${m.terrain ? `<div style="position:absolute;top:12px;right:14px;font-size:11px;color:#444;letter-spacing:1px;">${m.terrain}</div>` : ""}
+        <div style="font-size:11px;color:#444;letter-spacing:2px;">MANCHE ${m.round||1} ${enSaisie?"· ⚡":""}</div>
+
+        <!-- Équipe A -->
+        <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7f000033,#e6394622);border-radius:12px;padding:12px 16px;">
+          <div style="font-size:18px;font-weight:800;color:#fff;">${m.equipeA}</div>
+          <div id="score-a-${id}" style="font-size:56px;font-weight:900;color:#e63946;line-height:1;">${m.scoreA||0}</div>
+        </div>
+
+        <!-- Barre de progression -->
+        <div style="background:#111;border-radius:6px;height:6px;overflow:hidden;">
+          <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#e63946;height:6px;transition:width .8s;border-radius:6px 0 0 6px;display:inline-block;"></div>
+          <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#1d6fa4;height:6px;transition:width .8s;border-radius:0 6px 6px 0;display:inline-block;float:right;"></div>
+        </div>
+
+        <!-- Équipe B -->
+        <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0d47a133,#1d6fa422);border-radius:12px;padding:12px 16px;">
+          <div style="font-size:18px;font-weight:800;color:#fff;">${m.equipeB}</div>
+          <div id="score-b-${id}" style="font-size:56px;font-weight:900;color:#1d6fa4;line-height:1;">${m.scoreB||0}</div>
+        </div>
+
+        <div style="font-size:11px;color:#333;text-align:center;">/ ${m.winScore||21} pts</div>
+      </div>`;
+  }
+
+  // ── 5+ matchs → liste compacte ──
+  function renderListe(matchs) {
+    return `
+      <div style="padding:16px 24px 0;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:26px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
+        <div style="font-size:13px;color:#444;letter-spacing:2px;">${matchs.length} MATCHS</div>
+      </div>
+      <div style="flex:1;padding:0 24px 16px;display:flex;flex-direction:column;gap:8px;">
+        ${matchs.map(([id,m]) => `
+          <div style="background:#0d0d0d;border-radius:14px;padding:14px 18px;border:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between;" class="fade-in">
+            ${m.terrain ? `<div style="font-size:11px;color:#444;width:80px;letter-spacing:1px;">${m.terrain}</div>` : `<div style="width:80px;"></div>`}
+            <div style="flex:1;font-size:18px;font-weight:800;text-align:right;padding-right:12px;">${m.equipeA}</div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <div id="score-a-${id}" style="font-size:40px;font-weight:900;color:#e63946;min-width:50px;text-align:center;">${m.scoreA||0}</div>
+              <div style="font-size:20px;color:#222;font-weight:900;">–</div>
+              <div id="score-b-${id}" style="font-size:40px;font-weight:900;color:#1d6fa4;min-width:50px;text-align:center;">${m.scoreB||0}</div>
+            </div>
+            <div style="flex:1;font-size:18px;font-weight:800;text-align:left;padding-left:12px;">${m.equipeB}</div>
+            <div style="font-size:11px;color:#333;width:60px;text-align:right;">R${m.round||1}</div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  function renderIdle() {
+    return `
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+        <div style="font-size:28px;color:#f4a100;font-weight:900;margin-bottom:6px;">${tournoi.nom}</div>
+        <div style="font-size:16px;color:#333;letter-spacing:2px;">EN ATTENTE DES MATCHS...</div>
+      </div>`;
+  }
+
+  function renderSponsors() {
+    const sponsors = (tournoi.sponsors || []).filter(s => s.name);
+    if (!sponsors.length) return;
+    const ticker = document.createElement("div");
+    ticker.style.cssText = "height:50px;background:#0a0a0a;border-top:1px solid #1a1a1a;display:flex;align-items:center;overflow:hidden;flex-shrink:0;";
+    const inner = document.createElement("div");
+    inner.style.cssText = `display:flex;animation:ticker ${sponsors.length*5}s linear infinite;width:max-content;`;
+    [...sponsors,...sponsors].forEach(s => {
+      const item = document.createElement("div");
+      item.style.cssText = "display:flex;align-items:center;gap:10px;padding:0 32px;border-right:1px solid #1a1a1a;flex-shrink:0;";
+      if (s.logo) { const img = document.createElement("img"); img.src=s.logo; img.style.cssText="height:28px;width:auto;object-fit:contain;opacity:.7;"; item.appendChild(img); }
+      if (s.name) { const span = document.createElement("span"); span.style.cssText="font-size:16px;font-weight:700;color:#444;letter-spacing:2px;white-space:nowrap;"; span.textContent=s.name; item.appendChild(span); }
+      inner.appendChild(item);
+    });
+    ticker.appendChild(inner);
+    document.getElementById("root").appendChild(ticker);
+  }
+</script>
+</body>
+</html>

@@ -74,40 +74,102 @@ const Toggle=({on,onChange,color="#f4a100"})=>(
   </div>
 );
 
-// ── Bag selector ──
-const BagSelector=({label,pts,val,onChange,color})=>(
-  <div style={{marginBottom:10}}>
-    <div style={{fontSize:12,color:"#aaa",marginBottom:5,fontFamily:F,letterSpacing:1,textTransform:"uppercase"}}>{label} <span style={{color,fontWeight:700}}>(+{pts}pt{pts>1?"s":""})</span></div>
-    <div style={{display:"flex",gap:6}}>
-      {[0,1,2,3,4].map(n=><button key={n} onClick={()=>onChange(n)} style={{width:42,height:42,borderRadius:9,border:val===n?`2px solid ${color}`:"2px solid #333",background:val===n?color:"#1a1a1a",color:val===n?"#fff":"#888",fontWeight:700,fontSize:16,cursor:"pointer",fontFamily:F}}>{n}</button>)}
-    </div>
-  </div>
-);
+// ── Flip Counter (animation split-flap) ──
+function FlipDigit({value, color}){
+  const [display, setDisplay] = useState(value);
+  const [flipping, setFlipping] = useState(false);
+  const prev = useRef(value);
 
-// ── Score summary box ──
-function SummaryBox({ptA,ptB,colA,colB,cancel,rawA,rawB}){
-  const [d,setD]=useState({a:0,b:0});const [ph,setPh]=useState("idle");const prev=useRef("");
   useEffect(()=>{
-    const k=`${ptA}-${ptB}`;if(k===prev.current)return;prev.current=k;
-    if(!ptA&&!ptB){setD({a:0,b:0});setPh("idle");return;}
-    setPh("counting");setD({a:0,b:0});let s=0;
-    const iv=setInterval(()=>{s++;setD({a:Math.min(s,ptA),b:Math.min(s,ptB)});if(s>=Math.max(ptA,ptB)){clearInterval(iv);setPh("done");}},55);
-    return()=>clearInterval(iv);
-  },[ptA,ptB]);
-  const empty=!ptA&&!ptB;
+    if(value === prev.current) return;
+    setFlipping(true);
+    const t = setTimeout(()=>{ setDisplay(value); setFlipping(false); prev.current = value; }, 180);
+    return ()=>clearTimeout(t);
+  },[value]);
+
   return(
-    <div style={{background:"#0d0d0d",border:"1px solid #252525",borderRadius:14,padding:"12px 14px",marginBottom:14,opacity:empty?.4:1,transition:"opacity .3s"}}>
-      <div style={{fontSize:10,letterSpacing:2,color:"#555",marginBottom:8,fontFamily:F}}>ROUND TOTAL</div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-around",position:"relative"}}>
-        <div style={{position:"absolute",fontSize:16,color:"#222",fontWeight:900,fontFamily:F}}>vs</div>
-        {[{v:d.a,p:ptA,c:colA,l:"A"},{v:d.b,p:ptB,c:colB,l:"B"}].map((t,i)=>(
-          <div key={i} style={{textAlign:"center"}}>
-            <div style={{fontSize:52,fontWeight:900,lineHeight:1,color:t.c,fontFamily:F,textShadow:ph==="done"&&t.p>0?`0 0 20px ${t.c}88`:"none",transform:ph==="counting"?"scale(1.08)":"scale(1)",transition:"all .2s"}}>{t.v>0?`+${t.v}`:"0"}</div>
-            <div style={{fontSize:10,color:t.c,opacity:.6,fontFamily:F,letterSpacing:2}}>TEAM {t.l}</div>
-          </div>
+    <div style={{
+      position:"relative", width:52, height:64, borderRadius:10,
+      background:"#1a1a1a", overflow:"hidden",
+      boxShadow:`0 4px 16px rgba(0,0,0,.5), 0 0 0 1px #2a2a2a`,
+    }}>
+      {/* Ligne centrale */}
+      <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:"#000",zIndex:3}}/>
+      {/* Top half */}
+      <div style={{
+        position:"absolute",top:0,left:0,right:0,height:"50%",
+        background:"#222", borderRadius:"10px 10px 0 0",
+        display:"flex",alignItems:"flex-end",justifyContent:"center",
+        overflow:"hidden",
+        transform: flipping ? "rotateX(-90deg)" : "rotateX(0deg)",
+        transformOrigin:"bottom center",
+        transition: flipping ? "transform .15s ease-in" : "none",
+      }}>
+        <div style={{fontFamily:F,fontWeight:900,fontSize:38,color,lineHeight:1,paddingBottom:2}}>{display}</div>
+      </div>
+      {/* Bottom half */}
+      <div style={{
+        position:"absolute",bottom:0,left:0,right:0,height:"50%",
+        background:"#1a1a1a", borderRadius:"0 0 10px 10px",
+        display:"flex",alignItems:"flex-start",justifyContent:"center",
+        overflow:"hidden",
+      }}>
+        <div style={{fontFamily:F,fontWeight:900,fontSize:38,color,lineHeight:1,paddingTop:2,marginTop:-19}}>{display}</div>
+      </div>
+      {/* Flip new top */}
+      {flipping&&<div style={{
+        position:"absolute",top:0,left:0,right:0,height:"50%",
+        background:"#222", borderRadius:"10px 10px 0 0",
+        display:"flex",alignItems:"flex-end",justifyContent:"center",
+        overflow:"hidden",
+        transform:"rotateX(0deg)",
+        transformOrigin:"bottom center",
+        zIndex:2,
+      }}>
+        <div style={{fontFamily:F,fontWeight:900,fontSize:38,color,lineHeight:1,paddingBottom:2}}>{value}</div>
+      </div>}
+    </div>
+  );
+}
+
+function FlipScore({value, color, label}){
+  const digits = String(Math.abs(value)).padStart(2,"0").split("");
+  return(
+    <div style={{textAlign:"center"}}>
+      <div style={{display:"flex",gap:4,justifyContent:"center",marginBottom:6}}>
+        {value > 0 && <div style={{fontFamily:F,fontWeight:900,fontSize:28,color,alignSelf:"center",marginRight:2}}>+</div>}
+        {digits.map((d,i)=><FlipDigit key={i} value={d} color={color}/>)}
+      </div>
+      <div style={{fontSize:10,color,opacity:.6,fontFamily:F,letterSpacing:2}}>{label}</div>
+    </div>
+  );
+}
+
+// ── Bag selector style référence (cercles 1-2-3-4) ──
+function BagSelector({label,pts,val,onChange,color}){
+  const nums = [1,2,3,4];
+  return(
+    <div style={{marginBottom:12}}>
+      <div style={{fontSize:12,color:"#aaa",marginBottom:7,fontFamily:F,letterSpacing:.5}}>
+        {label} <span style={{color,fontWeight:700}}>({pts} {pts>1?"Points":"Point"})</span>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        {nums.map(n=>(
+          <button key={n} onClick={()=>onChange(val===n?0:n)}
+            style={{
+              width:46,height:46,borderRadius:"50%",
+              background:val===n?color:"#d0d0d0",
+              border:"none",
+              color:val===n?"#fff":"#555",
+              fontWeight:800,fontSize:18,
+              cursor:"pointer",
+              fontFamily:F,
+              boxShadow:val===n?`0 4px 12px ${color}66`:"none",
+              transition:"all .15s",
+              transform:val===n?"scale(1.1)":"scale(1)",
+            }}>{n}</button>
         ))}
       </div>
-      {cancel&&(rawA>0||rawB>0)&&<div style={{textAlign:"center",marginTop:6,fontSize:11,color:"#444",fontFamily:F}}>Raw: <span style={{color:colA}}>{rawA}</span> – <span style={{color:colB}}>{rawB}</span> → cancellation</div>}
     </div>
   );
 }
@@ -592,7 +654,7 @@ export default function App(){
 
   return(
     <div style={{minHeight:"100vh",background:"#0a0a0a",...S,color:"#fff",display:"flex",flexDirection:"column"}}>
-      <style>{`:root{--font:'Barlow Condensed',sans-serif}@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      <style>{`:root{--font:'Barlow Condensed',sans-serif}@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}@keyframes flip-down{0%{transform:rotateX(0deg)}100%{transform:rotateX(-90deg)}}@keyframes flip-up{0%{transform:rotateX(90deg)}100%{transform:rotateX(0deg)}}`}</style>
       <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet"/>
 
       {/* Header */}
@@ -651,31 +713,61 @@ export default function App(){
       </div>
 
       {/* Enter Score Modal */}
-      {showScore&&<Modal><div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:13}}>
-          <div style={{fontSize:19,fontWeight:900,letterSpacing:1}}>Entrer les scores</div>
-          <div style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:7,padding:"3px 9px",fontSize:12,color:"#aaa"}}>Round <span style={{color:"#fff",fontWeight:800}}>{game.round}</span></div>
+      {showScore&&<Modal>
+        <div>
+          {/* Header sombre style référence */}
+          <div style={{background:"#1e1e1e",borderRadius:"10px 10px 0 0",margin:"-22px -22px 16px",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:18,fontWeight:900,letterSpacing:2,textTransform:"uppercase"}}>ENTER SCORES</div>
+            <div style={{background:"#fff",borderRadius:20,padding:"4px 14px",fontSize:14,fontWeight:900,color:"#000",fontFamily:F}}>Round: <span style={{fontWeight:900}}>{game.round}</span></div>
+          </div>
+
+          {/* Team A */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:14}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:20,fontWeight:900,color:cA.s,letterSpacing:2,marginBottom:10,textAlign:"center"}}>{cfg.teamA.name.toUpperCase()}</div>
+              <BagSelector label="Bags In Hole" pts={3} val={game.entry.a.hole} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,hole:v}}}))}/>
+              <BagSelector label="Bags On Board" pts={1} val={game.entry.a.board} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,board:v}}}))}/>
+            </div>
+            <div style={{background:cA.s+"22",borderRadius:14,padding:"16px 10px",border:`1px solid ${cA.s}44`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:32}}>
+              <FlipScore value={prev.a} color={cA.s} label="PTS"/>
+            </div>
+          </div>
+
+          <div style={{height:1,background:"#222",margin:"0 -22px 14px"}}/>
+
+          {/* Team B */}
+          {!cfg.ghostMode&&<div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:14}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:20,fontWeight:900,color:cB.s,letterSpacing:2,marginBottom:10,textAlign:"center"}}>{cfg.teamB.name.toUpperCase()}</div>
+              <BagSelector label="Bags In Hole" pts={3} val={game.entry.b.hole} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,hole:v}}}))}/>
+              <BagSelector label="Bags On Board" pts={1} val={game.entry.b.board} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,board:v}}}))}/>
+            </div>
+            <div style={{background:cB.s+"22",borderRadius:14,padding:"16px 10px",border:`1px solid ${cB.s}44`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:32}}>
+              <FlipScore value={prev.b} color={cB.s} label="PTS"/>
+            </div>
+          </div>}
+
+          {cfg.ghostMode&&<div style={{background:"#111",borderRadius:13,padding:13,marginBottom:14,border:"1px solid #222",textAlign:"center"}}>
+            <div style={{fontSize:12,color:"#555",marginBottom:3}}>👻 Ghost score entre {ghost.min} et {ghost.max} pts</div>
+          </div>}
+
+          {cfg.cancellation&&(rawA>0||rawB>0)&&<div style={{background:"#0d0d0d",borderRadius:10,padding:"8px 12px",marginBottom:12,border:"1px solid #1a1a1a",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:11,color:"#555"}}>ACL Cancellation</div>
+            <div style={{fontSize:13,fontWeight:700}}>
+              <span style={{color:cA.s}}>+{prev.a}</span>
+              <span style={{color:"#333",margin:"0 6px"}}>|</span>
+              <span style={{color:cB.s}}>+{prev.b}</span>
+              <span style={{fontSize:10,color:"#444",marginLeft:6}}>(brut: {rawA}–{rawB})</span>
+            </div>
+          </div>}
+
+          {/* Boutons */}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={saveRound} style={{width:"100%",padding:"15px 0",borderRadius:14,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",...S,fontSize:18,fontWeight:900,cursor:"pointer",letterSpacing:1}}>Save Round</button>
+            <button onClick={()=>{setShowScore(false);setGame(g=>({...g,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}}));}} style={{width:"100%",padding:"11px 0",borderRadius:11,background:"transparent",border:"none",color:"#666",...S,fontSize:15,fontWeight:700,cursor:"pointer"}}>Cancel</button>
+          </div>
         </div>
-        <SummaryBox ptA={prev.a} ptB={cfg.ghostMode?0:prev.b} colA={cA.s} colB={cB.s} cancel={cfg.cancellation} rawA={rawA} rawB={rawB}/>
-        <div style={{background:cA.s+"12",borderRadius:13,padding:13,marginBottom:10,border:`1px solid ${cA.s}30`}}>
-          <div style={{fontSize:15,fontWeight:900,color:cA.s,letterSpacing:2,marginBottom:9}}>🎯 {cfg.teamA.name}</div>
-          <BagSelector label="Bags In Hole" pts={3} val={game.entry.a.hole} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,hole:v}}}))}/>
-          <BagSelector label="Bags On Board" pts={1} val={game.entry.a.board} color={cA.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,a:{...g.entry.a,board:v}}}))}/>
-        </div>
-        {!cfg.ghostMode&&<div style={{background:cB.s+"12",borderRadius:13,padding:13,marginBottom:13,border:`1px solid ${cB.s}30`}}>
-          <div style={{fontSize:15,fontWeight:900,color:cB.s,letterSpacing:2,marginBottom:9}}>🎯 {cfg.teamB.name}</div>
-          <BagSelector label="Bags In Hole" pts={3} val={game.entry.b.hole} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,hole:v}}}))}/>
-          <BagSelector label="Bags On Board" pts={1} val={game.entry.b.board} color={cB.s} onChange={v=>setGame(g=>({...g,entry:{...g.entry,b:{...g.entry.b,board:v}}}))}/>
-        </div>}
-        {cfg.ghostMode&&<div style={{background:"#111",borderRadius:13,padding:13,marginBottom:13,border:"1px solid #222",textAlign:"center"}}>
-          <div style={{fontSize:12,color:"#555",marginBottom:3}}>👻 Ghost score entre {ghost.min} et {ghost.max} pts</div>
-          <div style={{fontSize:11,color:"#444"}}>Révélé après validation</div>
-        </div>}
-        <div style={{display:"flex",gap:9}}>
-          <button onClick={()=>{setShowScore(false);setGame(g=>({...g,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}}));}} style={{flex:1,padding:"12px 0",borderRadius:11,background:"#1a1a1a",border:"1px solid #333",color:"#888",...S,fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
-          <button onClick={saveRound} style={{flex:2,padding:"12px 0",borderRadius:11,background:"linear-gradient(135deg,#f4a100,#f77f00)",border:"none",color:"#000",...S,fontSize:16,fontWeight:900,cursor:"pointer",letterSpacing:1}}>Valider la Manche</button>
-        </div>
-      </div></Modal>}
+      </Modal>}
 
       {/* Stats Modal */}
       {showStats&&<Modal><div>

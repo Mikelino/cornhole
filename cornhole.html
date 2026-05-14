@@ -98,59 +98,97 @@ window.sk = sk;
 const GHOST_PRESET = () => GHOST[sk.cfg.ghostDiff];
 
 // ════════════════════════════════════════
-// FLIP COUNTER — moteur JS réutilisable partout
+// FLIP COUNTER — moteur split-flap sans re-render
 // ════════════════════════════════════════
 
-// Génère le HTML d'un flip counter (statique, pour innerHTML)
+// Génère le HTML d'un flip counter (appelé une seule fois par render)
 function flipHTML(value, color, size=64, id="") {
-  const digits = String(Math.abs(value)).padStart(2,"0").split("");
-  const fs = Math.round(size * 0.65);
-  const w  = Math.round(size * 0.75);
-  const prefix = value > 0 ? `<span style="font-size:${Math.round(fs*.7)}px;font-weight:900;color:${color};align-self:center;margin-right:2px;">+</span>` : "";
-  const digs = digits.map((d,i) => `
-    <div class="flip-digit" id="${id?`fd-${id}-${i}`:""}" data-val="${d}" style="width:${w}px;height:${size}px;font-size:${fs}px;">
-      <div class="fd-top" style="color:${color};"><span>${d}</span></div>
-      <div class="fd-bot" style="color:${color};"><span>${d}</span></div>
-      <div class="fd-fold" style="color:${color};"><span>${d}</span></div>
-      <div class="fd-unfold" style="color:${color};"><span>${d}</span></div>
-    </div>`).join("");
-  return `<div style="display:inline-flex;align-items:center;gap:3px;">${prefix}<div class="flip-wrap">${digs}</div></div>`;
+  const digits = String(Math.abs(Math.round(value))).padStart(2,"0").split("");
+  const fs = Math.round(size * 0.66);
+  const w  = Math.round(size * 0.76);
+  return `<div class="flip-wrap" style="display:inline-flex;gap:3px;perspective:600px;">
+    ${digits.map((d,i) => `
+      <div class="flip-digit" id="${id?`fd-${id}-${i}`:""}" data-val="${d}"
+           style="position:relative;width:${w}px;height:${size}px;font-size:${fs}px;font-family:'Barlow Condensed',sans-serif;font-weight:900;">
+        <div class="fd-top" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;
+             background:#222;border-radius:8px 8px 0 0;
+             display:flex;align-items:flex-end;justify-content:center;
+             border-bottom:1.5px solid #111;">
+          <span style="color:${color};transform:translateY(50%);display:block;line-height:1;">${d}</span>
+        </div>
+        <div class="fd-bot" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;
+             background:#1a1a1a;border-radius:0 0 8px 8px;
+             display:flex;align-items:flex-start;justify-content:center;">
+          <span style="color:${color};transform:translateY(-50%);display:block;line-height:1;">${d}</span>
+        </div>
+        <div class="fd-fold" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;
+             background:#222;border-radius:8px 8px 0 0;
+             display:flex;align-items:flex-end;justify-content:center;
+             transform-origin:bottom center;z-index:2;backface-visibility:hidden;
+             box-shadow:0 2px 6px rgba(0,0,0,.4);">
+          <span style="color:${color};transform:translateY(50%);display:block;line-height:1;">${d}</span>
+        </div>
+        <div class="fd-unfold" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;
+             background:#1a1a1a;border-radius:0 0 8px 8px;
+             display:flex;align-items:flex-start;justify-content:center;
+             transform-origin:top center;z-index:2;transform:rotateX(90deg);backface-visibility:hidden;">
+          <span style="color:${color};transform:translateY(-50%);display:block;line-height:1;">${d}</span>
+        </div>
+      </div>`).join("")}
+  </div>`;
 }
 
-// Anime un flip digit existant vers une nouvelle valeur
+// Anime un seul digit vers une nouvelle valeur (sans recréer le DOM)
 function flipDigitTo(el, newVal) {
   if (!el) return;
-  const oldVal = el.dataset.val || "0";
-  if (oldVal === String(newVal)) return;
-  const color = el.querySelector(".fd-top").style.color;
-  // Mettre à jour la valeur affichée après l'animation
-  el.querySelector(".fd-fold span").textContent = oldVal;
-  el.querySelector(".fd-unfold span").textContent = newVal;
+  const cur = el.dataset.val;
+  if (cur === String(newVal)) return;
+  const fold   = el.querySelector(".fd-fold span");
+  const unfold = el.querySelector(".fd-unfold span");
+  const top    = el.querySelector(".fd-top span");
+  const bot    = el.querySelector(".fd-bot span");
+  const foldEl   = el.querySelector(".fd-fold");
+  const unfoldEl = el.querySelector(".fd-unfold");
+
+  // Préparer : fold affiche l'ancienne valeur, unfold affiche la nouvelle
+  fold.textContent   = cur;
+  unfold.textContent = newVal;
   el.dataset.val = String(newVal);
-  el.classList.remove("flipping");
-  void el.offsetWidth; // force reflow
-  el.classList.add("flipping");
+
+  // Reset animations
+  foldEl.style.animation   = "none";
+  unfoldEl.style.animation = "none";
+  void foldEl.offsetWidth; // reflow
+
+  // Lancer
+  foldEl.style.animation   = "flip-top .2s ease-in forwards";
+  unfoldEl.style.animation = "flip-bot .2s ease-out .2s forwards";
+
+  // Mettre à jour top/bot (valeurs statiques) après l'anim
   setTimeout(() => {
-    el.querySelector(".fd-top span").textContent = newVal;
-    el.querySelector(".fd-bot span").textContent = newVal;
-    el.classList.remove("flipping");
-  }, 380);
+    top.textContent = newVal;
+    bot.textContent = newVal;
+    foldEl.style.animation   = "none";
+    unfoldEl.style.animation = "none";
+    // Remettre fold sur la nouvelle valeur pour le prochain flip
+    fold.textContent = newVal;
+  }, 450);
 }
 
-// Anime un flip counter complet identifié par id
+// Anime un compteur complet (2 digits) par son id
 function flipTo(id, newValue) {
-  const digits = String(Math.abs(newValue)).padStart(2,"0").split("");
+  const digits = String(Math.abs(Math.round(newValue))).padStart(2,"0").split("");
   digits.forEach((d, i) => {
     const el = document.getElementById(`fd-${id}-${i}`);
-    flipDigitTo(el, d);
+    if (el) flipDigitTo(el, d);
   });
 }
 
-// Wrapper complet : conteneur avec label
-function flipScoreHTML(value, color, label, id, size=64) {
+// Wrapper avec fond coloré et label
+function flipScoreHTML(value, color, label, id, size=56) {
   return `
-    <div style="background:${color}22;border-radius:14px;padding:14px 12px;border:1px solid ${color}44;text-align:center;">
-      <div style="margin-bottom:6px;">${flipHTML(value, color, size, id)}</div>
+    <div style="background:${color}18;border-radius:14px;padding:14px 12px;border:1px solid ${color}33;text-align:center;flex-shrink:0;">
+      <div style="margin-bottom:5px;">${flipHTML(value, color, size, id)}</div>
       <div style="font-size:10px;color:${color};opacity:.6;letter-spacing:2px;">${label}</div>
     </div>`;
 }
@@ -278,66 +316,34 @@ function renderListeSimple() {
   el.innerHTML = html;
 }
 
-function renderCarteSimple(m) {
-  const st = sacsEnCours[m.id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
+function renderSaisieSection(m, st) {
   const rawA=st.A.trou*3+st.A.plateau, rawB=st.B.trou*3+st.B.plateau;
   const ptsA=m.cancellation?Math.max(0,rawA-rawB):rawA;
   const ptsB=m.cancellation?Math.max(0,rawB-rawA):rawB;
-  const gagnant = m.scoreA>=m.winScore?m.nomA:m.scoreB>=m.winScore?m.nomB:null;
-  const cA=COLORS[0],cB=COLORS[1];
-
-  return `<div id="carte-${m.id}" style="background:#111;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid ${gagnant?"#f4a10044":"#1e1e1e"};" class="slide-up">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div>
-        <div style="font-size:15px;font-weight:900;">${m.nomA} <span style="color:#444;">vs</span> ${m.nomB}</div>
-        <div style="font-size:11px;color:#444;margin-top:1px;">${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;">
-        ${flipHTML(m.scoreA,"#e63946",52,`s-${m.id}-a`)}
-        <div style="font-size:18px;color:#222;font-weight:900;">–</div>
-        ${flipHTML(m.scoreB,"#1d6fa4",52,`s-${m.id}-b`)}
-      </div>
-    </div>
-    <!-- Barres -->
-    <div style="display:flex;gap:4px;margin-bottom:10px;">
-      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div style="width:${Math.min((m.scoreA/m.winScore)*100,100)}%;background:#e63946;height:4px;transition:width .6s;"></div></div>
-      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div style="width:${Math.min((m.scoreB/m.winScore)*100,100)}%;background:#1d6fa4;height:4px;float:right;transition:width .6s;"></div></div>
-    </div>
-    ${gagnant?`<div style="background:linear-gradient(135deg,#b37700,#f4a100);border-radius:10px;padding:10px;text-align:center;margin-bottom:10px;">
-      <div style="font-size:16px;font-weight:900;color:#000;">🏆 ${gagnant} GAGNE !</div>
-    </div>`:`
-    <!-- Saisie sacs -->
-    <div style="background:#0a0a0a;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid #1a1a1a;">
+  return `<div class="saisie-sect" style="background:#0a0a0a;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid #1a1a1a;">
       <div style="font-size:10px;letter-spacing:2px;color:#444;margin-bottom:10px;">MANCHE ${m.round} — SAISIE ARBITRE</div>
-      <!-- Équipe A -->
       <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#e63946;font-weight:700;margin-bottom:6px;letter-spacing:1px;">${m.nomA}</div>
+        <div style="font-size:11px;color:#e63946;font-weight:700;margin-bottom:6px;">${m.nomA}</div>
         <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#e63946;font-weight:700;">(3 Points)</span></div>
+          <div style="flex:1;"><div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#e63946;font-weight:700;">(3 Points)</span></div>
             <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','trou',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.A.trou===n?"#e63946":"#d0d0d0"};border:none;color:${st.A.trou===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.A.trou===n?"0 4px 12px #e6394666":"none"};transform:${st.A.trou===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#e63946;font-weight:700;">(1 Point)</span></div>
+          <div style="flex:1;"><div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#e63946;font-weight:700;">(1 Point)</span></div>
             <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','A','plateau',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.A.plateau===n?"#e63946":"#d0d0d0"};border:none;color:${st.A.plateau===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.A.plateau===n?"0 4px 12px #e6394666":"none"};transform:${st.A.plateau===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
         </div>
       </div>
-      <!-- Équipe B -->
       <div style="margin-bottom:10px;">
-        <div style="font-size:11px;color:#1d6fa4;font-weight:700;margin-bottom:6px;letter-spacing:1px;">${m.nomB}</div>
+        <div style="font-size:11px;color:#1d6fa4;font-weight:700;margin-bottom:6px;">${m.nomB}</div>
         <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#1d6fa4;font-weight:700;">(3 Points)</span></div>
+          <div style="flex:1;"><div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:#1d6fa4;font-weight:700;">(3 Points)</span></div>
             <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','trou',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.B.trou===n?"#1d6fa4":"#d0d0d0"};border:none;color:${st.B.trou===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.B.trou===n?"0 4px 12px #1d6fa466":"none"};transform:${st.B.trou===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#1d6fa4;font-weight:700;">(1 Point)</span></div>
+          <div style="flex:1;"><div style="font-size:11px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:#1d6fa4;font-weight:700;">(1 Point)</span></div>
             <div style="display:flex;gap:6px;">${[1,2,3,4].map(n=>`<button onclick="setSacsSimple('${m.id}','B','plateau',${n})" style="width:46px;height:46px;border-radius:50%;background:${st.B.plateau===n?"#1d6fa4":"#d0d0d0"};border:none;color:${st.B.plateau===n?"#fff":"#555"};font-size:18px;font-weight:800;cursor:pointer;box-shadow:${st.B.plateau===n?"0 4px 12px #1d6fa466":"none"};transform:${st.B.plateau===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("")}</div>
           </div>
         </div>
       </div>
-      <!-- Preview -->
       <div style="display:flex;justify-content:space-between;align-items:center;background:#111;border-radius:8px;padding:8px 12px;margin-bottom:8px;">
         <div style="font-size:11px;color:#444;letter-spacing:1px;">POINTS MANCHE${m.cancellation?" (ACL)":""}</div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -351,7 +357,33 @@ function renderCarteSimple(m) {
         <button onclick="annulerSaisie('${m.id}')" style="flex:1;padding:11px;border-radius:10px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:14px;font-weight:700;cursor:pointer;">✕ Annuler</button>
         <button onclick="validerMancheSimple('${m.id}')" style="flex:2;padding:11px;border-radius:10px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;letter-spacing:1px;">✓ Valider Manche</button>
       </div>
-    </div>`}
+    </div>`;
+}
+
+function renderCarteSimple(m) {
+  const st = sacsEnCours[m.id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
+  const gagnant = m.scoreA>=m.winScore?m.nomA:m.scoreB>=m.winScore?m.nomB:null;
+
+  return `<div id="carte-${m.id}" style="background:#111;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid ${gagnant?"#f4a10044":"#1e1e1e"};">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div>
+        <div style="font-size:15px;font-weight:900;">${m.nomA} <span style="color:#444;">vs</span> ${m.nomB}</div>
+        <div class="match-info" style="font-size:11px;color:#444;margin-top:1px;">${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;">
+        ${flipHTML(m.scoreA,"#e63946",52,`s-${m.id}-a`)}
+        <div style="font-size:18px;color:#222;font-weight:900;">–</div>
+        ${flipHTML(m.scoreB,"#1d6fa4",52,`s-${m.id}-b`)}
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:10px;">
+      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div class="bar-a" style="width:${Math.min((m.scoreA/m.winScore)*100,100)}%;background:#e63946;height:4px;transition:width .6s;"></div></div>
+      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div class="bar-b" style="width:${Math.min((m.scoreB/m.winScore)*100,100)}%;background:#1d6fa4;height:4px;float:right;transition:width .6s;"></div></div>
+    </div>
+    ${gagnant
+      ? `<div style="background:linear-gradient(135deg,#b37700,#f4a100);border-radius:10px;padding:10px;text-align:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:900;color:#000;">🏆 ${gagnant} GAGNE !</div></div>`
+      : renderSaisieSection(m, st)
+    }
     <div style="display:flex;gap:6px;">
       ${gagnant?`<button onclick="revancher('${m.id}')" style="flex:1;padding:8px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#f4a100;font-size:12px;font-weight:700;cursor:pointer;">🔄 Revanche</button>`:""}
       <button onclick="supprimerMatchSimple('${m.id}')" style="padding:8px 14px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:12px;cursor:pointer;">🗑 Supprimer</button>
@@ -378,11 +410,20 @@ window.ajouterMatchSimple=()=>{
 };
 window.setSacsSimple=(id,eq,type,val)=>{
   if(!sacsEnCours[id])sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  // Toggle : cliquer sur le même bouton remet à 0
   sacsEnCours[id][eq][type]=sacsEnCours[id][eq][type]===val?0:val;
-  renderListeSimple();
+  // Re-render uniquement la section saisie, pas toute la liste
+  const m = matchsSimple.find(x=>x.id===id);
+  const sect = document.querySelector(`#carte-${id} .saisie-sect`);
+  if(sect && m) sect.outerHTML = renderSaisieSection(m, sacsEnCours[id]);
+  else renderListeSimple(); // fallback
 };
-window.annulerSaisie=(id)=>{sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};renderListeSimple();};
+window.annulerSaisie=(id)=>{
+  sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
+  const m = matchsSimple.find(x=>x.id===id);
+  const sect = document.querySelector(`#carte-${id} .saisie-sect`);
+  if(sect && m) sect.outerHTML = renderSaisieSection(m, sacsEnCours[id]);
+  else renderListeSimple();
+};
 window.validerMancheSimple=(id)=>{
   const m=matchsSimple.find(x=>x.id===id);if(!m)return;
   const st=sacsEnCours[id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
@@ -392,12 +433,27 @@ window.validerMancheSimple=(id)=>{
   m.scoreA+=ptsA;m.scoreB+=ptsB;m.round++;
   if(m.scoreA>=m.winScore||m.scoreB>=m.winScore)m.termine=true;
   sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  saveSimple();renderListeSimple();
-  // Flip animation après re-render
-  setTimeout(()=>{
+  saveSimple();
+
+  if(m.termine){
+    // Partie terminée : re-render complet pour afficher le banner gagnant
+    renderListeSimple();
+  } else {
+    // Pas terminée : flip in-place, puis re-render les boutons seulement
     if(ptsA>0) flipTo(`s-${id}-a`, m.scoreA);
     if(ptsB>0) flipTo(`s-${id}-b`, m.scoreB);
-  }, 30);
+    // Mettre à jour les barres de progression sans full re-render
+    const barA = document.querySelector(`#carte-${id} .bar-a`);
+    const barB = document.querySelector(`#carte-${id} .bar-b`);
+    if(barA) barA.style.width = Math.min((m.scoreA/m.winScore)*100,100)+"%";
+    if(barB) barB.style.width = Math.min((m.scoreB/m.winScore)*100,100)+"%";
+    // Re-render uniquement la section saisie pour le round suivant
+    const saisieSect = document.querySelector(`#carte-${id} .saisie-sect`);
+    if(saisieSect) saisieSect.outerHTML = renderSaisieSection(m, sacsEnCours[id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}});
+    // Mettre à jour le numéro de manche
+    const infoEl = document.querySelector(`#carte-${id} .match-info`);
+    if(infoEl) infoEl.innerHTML = `${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}`;
+  }
 };
 function animScore(elId){const el=document.getElementById(elId);if(!el)return;el.classList.remove("score-pop");void el.offsetWidth;el.classList.add("score-pop");}
 window.supprimerMatchSimple=(id)=>{if(!confirm("Supprimer ce match ?"))return;matchsSimple=matchsSimple.filter(m=>m.id!==id);delete sacsEnCours[id];saveSimple();renderListeSimple();};

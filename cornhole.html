@@ -22,8 +22,24 @@
     @keyframes tsh{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px) rotate(-2deg)}40%{transform:translateX(9px) rotate(2deg)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
     @keyframes gp{0%,100%{box-shadow:0 0 30px var(--wc,#f4a100)44}50%{box-shadow:0 0 70px var(--wc,#f4a100)88}}
     @keyframes slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes flip-top{0%{transform:rotateX(0)}100%{transform:rotateX(-90deg)}}
+    @keyframes flip-bot{0%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
     .score-pop{animation:score-pop .45s cubic-bezier(.34,1.56,.64,1)}
     .slide-up{animation:slide-up .3s ease forwards}
+    /* ── Flip Counter ── */
+    .flip-wrap{display:inline-flex;gap:3px;perspective:400px;}
+    .flip-digit{position:relative;width:48px;height:64px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:42px;}
+    .flip-digit .fd-top,.flip-digit .fd-bot{position:absolute;left:0;right:0;height:50%;overflow:hidden;background:#1e1e1e;}
+    .flip-digit .fd-top{top:0;border-radius:8px 8px 0 0;display:flex;align-items:flex-end;justify-content:center;border-bottom:1.5px solid #000;}
+    .flip-digit .fd-bot{bottom:0;border-radius:0 0 8px 8px;display:flex;align-items:flex-start;justify-content:center;}
+    .flip-digit .fd-top span{transform:translateY(50%);display:block;line-height:1;}
+    .flip-digit .fd-bot span{transform:translateY(-50%);display:block;line-height:1;}
+    .flip-digit .fd-fold{position:absolute;top:0;left:0;right:0;height:50%;border-radius:8px 8px 0 0;overflow:hidden;transform-origin:bottom;background:#222;display:flex;align-items:flex-end;justify-content:center;z-index:2;backface-visibility:hidden;}
+    .flip-digit .fd-fold span{transform:translateY(50%);display:block;line-height:1;}
+    .flip-digit .fd-unfold{position:absolute;bottom:0;left:0;right:0;height:50%;border-radius:0 0 8px 8px;overflow:hidden;transform-origin:top;background:#1e1e1e;display:flex;align-items:flex-start;justify-content:center;z-index:2;transform:rotateX(90deg);backface-visibility:hidden;}
+    .flip-digit .fd-unfold span{transform:translateY(-50%);display:block;line-height:1;}
+    .flip-digit.flipping .fd-fold{animation:flip-top .18s ease-in forwards;}
+    .flip-digit.flipping .fd-unfold{animation:flip-bot .18s ease-out .18s forwards;}
   </style>
 </head>
 <body>
@@ -80,6 +96,64 @@ let sk = {
 };
 window.sk = sk;
 const GHOST_PRESET = () => GHOST[sk.cfg.ghostDiff];
+
+// ════════════════════════════════════════
+// FLIP COUNTER — moteur JS réutilisable partout
+// ════════════════════════════════════════
+
+// Génère le HTML d'un flip counter (statique, pour innerHTML)
+function flipHTML(value, color, size=64, id="") {
+  const digits = String(Math.abs(value)).padStart(2,"0").split("");
+  const fs = Math.round(size * 0.65);
+  const w  = Math.round(size * 0.75);
+  const prefix = value > 0 ? `<span style="font-size:${Math.round(fs*.7)}px;font-weight:900;color:${color};align-self:center;margin-right:2px;">+</span>` : "";
+  const digs = digits.map((d,i) => `
+    <div class="flip-digit" id="${id?`fd-${id}-${i}`:""}" data-val="${d}" style="width:${w}px;height:${size}px;font-size:${fs}px;">
+      <div class="fd-top" style="color:${color};"><span>${d}</span></div>
+      <div class="fd-bot" style="color:${color};"><span>${d}</span></div>
+      <div class="fd-fold" style="color:${color};"><span>${d}</span></div>
+      <div class="fd-unfold" style="color:${color};"><span>${d}</span></div>
+    </div>`).join("");
+  return `<div style="display:inline-flex;align-items:center;gap:3px;">${prefix}<div class="flip-wrap">${digs}</div></div>`;
+}
+
+// Anime un flip digit existant vers une nouvelle valeur
+function flipDigitTo(el, newVal) {
+  if (!el) return;
+  const oldVal = el.dataset.val || "0";
+  if (oldVal === String(newVal)) return;
+  const color = el.querySelector(".fd-top").style.color;
+  // Mettre à jour la valeur affichée après l'animation
+  el.querySelector(".fd-fold span").textContent = oldVal;
+  el.querySelector(".fd-unfold span").textContent = newVal;
+  el.dataset.val = String(newVal);
+  el.classList.remove("flipping");
+  void el.offsetWidth; // force reflow
+  el.classList.add("flipping");
+  setTimeout(() => {
+    el.querySelector(".fd-top span").textContent = newVal;
+    el.querySelector(".fd-bot span").textContent = newVal;
+    el.classList.remove("flipping");
+  }, 380);
+}
+
+// Anime un flip counter complet identifié par id
+function flipTo(id, newValue) {
+  const digits = String(Math.abs(newValue)).padStart(2,"0").split("");
+  digits.forEach((d, i) => {
+    const el = document.getElementById(`fd-${id}-${i}`);
+    flipDigitTo(el, d);
+  });
+}
+
+// Wrapper complet : conteneur avec label
+function flipScoreHTML(value, color, label, id, size=64) {
+  return `
+    <div style="background:${color}22;border-radius:14px;padding:14px 12px;border:1px solid ${color}44;text-align:center;">
+      <div style="margin-bottom:6px;">${flipHTML(value, color, size, id)}</div>
+      <div style="font-size:10px;color:${color};opacity:.6;letter-spacing:2px;">${label}</div>
+    </div>`;
+}
 
 function calcPts(entry, cancel) {
   const ra=entry.a.hole*3+entry.a.board, rb=entry.b.hole*3+entry.b.board;
@@ -219,9 +293,9 @@ function renderCarteSimple(m) {
         <div style="font-size:11px;color:#444;margin-top:1px;">${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}</div>
       </div>
       <div style="display:flex;align-items:center;gap:5px;">
-        <div id="score-a-${m.id}" style="font-size:38px;font-weight:900;color:#e63946;line-height:1;">${m.scoreA}</div>
+        ${flipHTML(m.scoreA,"#e63946",52,`s-${m.id}-a`)}
         <div style="font-size:18px;color:#222;font-weight:900;">–</div>
-        <div id="score-b-${m.id}" style="font-size:38px;font-weight:900;color:#1d6fa4;line-height:1;">${m.scoreB}</div>
+        ${flipHTML(m.scoreB,"#1d6fa4",52,`s-${m.id}-b`)}
       </div>
     </div>
     <!-- Barres -->
@@ -319,8 +393,11 @@ window.validerMancheSimple=(id)=>{
   if(m.scoreA>=m.winScore||m.scoreB>=m.winScore)m.termine=true;
   sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
   saveSimple();renderListeSimple();
-  if(ptsA>0)animScore(`score-a-${id}`);
-  if(ptsB>0)animScore(`score-b-${id}`);
+  // Flip animation après re-render
+  setTimeout(()=>{
+    if(ptsA>0) flipTo(`s-${id}-a`, m.scoreA);
+    if(ptsB>0) flipTo(`s-${id}-b`, m.scoreB);
+  }, 30);
 };
 function animScore(elId){const el=document.getElementById(elId);if(!el)return;el.classList.remove("score-pop");void el.offsetWidth;el.classList.add("score-pop");}
 window.supprimerMatchSimple=(id)=>{if(!confirm("Supprimer ce match ?"))return;matchsSimple=matchsSimple.filter(m=>m.id!==id);delete sacsEnCours[id];saveSimple();renderListeSimple();};
@@ -461,15 +538,15 @@ function renderSKGame(){
   const prev=calcPts(g.entry,c.cancellation);
   const ghost=GHOST_PRESET();
 
-  const scorePanel=(name,score,col,lead,photo,players)=>`
+  const scorePanel=(name,score,col,lead,photo,players,panelId)=>`
     <div style="flex:1;background:${col.bg};border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;box-shadow:0 8px 32px ${col.s}44;position:relative;overflow:hidden;">
       <div style="position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.06);"></div>
       ${lead?`<div style="position:absolute;top:6px;right:8px;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.7);background:rgba(0,0,0,.2);border-radius:5px;padding:2px 5px;">LEADING</div>`:""}
       ${photo?`<img src="${photo}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4);margin-bottom:4px;"/>` : ""}
-      <div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:1px;text-align:center;max-width:90%;line-height:1.1;">${name}</div>
-      ${c.playersPerTeam===2&&players?.filter(p=>p).length>0?`<div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:1px;">${players.filter(p=>p).slice(0,2).join(" · ")}</div>`:""}
-      <div id="sk-score-${col.s.replace("#","")}" style="font-size:76px;font-weight:900;line-height:1;color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.4);">${score}</div>
-      <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:1px;">/ ${c.winScore} pts</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:8px;text-align:center;max-width:90%;line-height:1.1;">${name}</div>
+      ${c.playersPerTeam===2&&players?.filter(p=>p).length>0?`<div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:6px;">${players.filter(p=>p).slice(0,2).join(" · ")}</div>`:""}
+      <div style="margin:4px 0;">${flipHTML(score,"#fff",72,panelId)}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:4px;">/ ${c.winScore} pts</div>
       <div style="width:100%;background:rgba(0,0,0,.2);border-radius:6px;height:5px;margin-top:8px;"><div style="width:${Math.min((score/c.winScore)*100,100)}%;background:#fff;border-radius:6px;height:5px;opacity:.8;transition:width .5s ease;"></div></div>
     </div>`;
 
@@ -486,10 +563,10 @@ function renderSKGame(){
       ${[`${c.playersPerTeam}v${c.playersPerTeam}`,c.cancellation&&"ACL CANCEL.",c.gameMode==="bust"&&"BUST +21→15",c.ghostMode&&`👻 ${ghost.label}`,c.useMaxRounds&&`${Math.round(c.maxRounds/c.playersPerTeam)}×/j`].filter(Boolean).map(b=>`<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:18px;padding:2px 9px;font-size:10px;color:#aaa;letter-spacing:1px;font-weight:700;">${b}</div>`).join("")}
     </div>
     <div style="padding:0 14px;display:flex;gap:9px;flex:1;min-height:200px;">
-      ${scorePanel(c.teamA.name,g.scores.a,cA,g.scores.a>g.scores.b,c.teamA.photo,c.teamA.players)}
+      ${scorePanel(c.teamA.name,g.scores.a,cA,g.scores.a>g.scores.b,c.teamA.photo,c.teamA.players,"sk-a")}
       ${c.ghostMode
         ?`<div style="flex:1;background:#1a1a1a;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;border:1px solid #2a2a2a;position:relative;"><div style="position:absolute;top:8px;right:8px;font-size:18px;">👻</div><div style="font-size:11px;font-weight:800;letter-spacing:2px;color:#444;margin-bottom:2px;">GHOST</div><div style="font-size:76px;font-weight:900;line-height:1;color:#444;">${g.scores.b}</div></div>`
-        :scorePanel(c.teamB.name,g.scores.b,cB,g.scores.b>g.scores.a,c.teamB.photo,c.teamB.players)
+        :scorePanel(c.teamB.name,g.scores.b,cB,g.scores.b>g.scores.a,c.teamB.photo,c.teamB.players,"sk-b")
       }
     </div>
     ${g.history.length?`<div style="padding:10px 14px 0;"><div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;">${g.history.slice().reverse().map(h=>`<div style="background:#1a1a1a;border-radius:7px;padding:5px 9px;min-width:56px;text-align:center;border:1px solid #222;flex-shrink:0;"><div style="font-size:9px;color:#444;margin-bottom:1px;">R${h.round}</div><div style="font-size:12px;font-weight:700;"><span style="color:${cA.s};">+${h.pts.a}</span><span style="color:#333;margin:0 2px;">|</span><span style="color:${c.ghostMode?"#555":cB.s};">+${h.pts.b}</span></div></div>`).join("")}</div></div>`:""}
@@ -512,7 +589,7 @@ function renderSKScoreModal(){
   const prev=calcPts(g.entry,c.cancellation);
   const ghost=GHOST_PRESET();
   const bagBtns=(key,type,color)=>[1,2,3,4].map(n=>`<button onclick="setSKEntry('${key}','${type}',${n})" style="width:46px;height:46px;border-radius:50%;background:${g.entry[key][type]===n?color:"#d0d0d0"};border:none;color:${g.entry[key][type]===n?"#fff":"#555"};font-weight:800;font-size:18px;cursor:pointer;box-shadow:${g.entry[key][type]===n?`0 4px 12px ${color}66`:"none"};transform:${g.entry[key][type]===n?"scale(1.1)":"scale(1)"};transition:all .15s;">${n}</button>`).join("");
-  const flipScore=(val,color)=>`<div style="background:${color}22;border-radius:14px;padding:16px 10px;border:1px solid ${color}44;display:flex;align-items:center;justify-content:center;margin-top:32px;"><div style="text-align:center;"><div style="display:flex;gap:4px;justify-content:center;margin-bottom:4px;">${val>0?`<div style="font-size:28px;font-weight:900;color:${color};align-self:center;margin-right:2px;">+</div>`:""}<div style="background:#1a1a1a;border-radius:10px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:52px;text-align:center;"><div style="font-size:38px;font-weight:900;color:${color};line-height:1;">${String(Math.abs(val)).padStart(2,"0")}</div></div></div><div style="font-size:10px;color:${color};opacity:.6;letter-spacing:2px;">PTS</div></div></div>`;
+  const flipScore=(val,color,id)=>`<div style="margin-top:32px;">${flipScoreHTML(val,color,"PTS",id,56)}</div>`;
   return`<div style="position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);">
     <div style="background:#111;border-radius:18px;padding:22px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,.8);border:1px solid #2a2a2a;max-height:90vh;overflow-y:auto;">
       <div style="background:#1e1e1e;border-radius:10px 10px 0 0;margin:-22px -22px 16px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
@@ -527,7 +604,7 @@ function renderSKScoreModal(){
           <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:${cA.s};font-weight:700;">(1 Point)</span></div>
           <div style="display:flex;gap:8px;">${bagBtns("a","board",cA.s)}</div>
         </div>
-        ${flipScore(prev.a,cA.s)}
+        ${flipScore(prev.a,cA.s,"modal-a")}
       </div>
       <div style="height:1px;background:#222;margin:0 -22px 14px;"></div>
       ${!c.ghostMode?`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">
@@ -538,7 +615,7 @@ function renderSKScoreModal(){
           <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:${cB.s};font-weight:700;">(1 Point)</span></div>
           <div style="display:flex;gap:8px;">${bagBtns("b","board",cB.s)}</div>
         </div>
-        ${flipScore(prev.b,cB.s)}
+        ${flipScore(prev.b,cB.s,"modal-b")}
       </div>`:`<div style="background:#111;border-radius:13px;padding:13px;margin-bottom:14px;border:1px solid #222;text-align:center;"><div style="font-size:12px;color:#555;">👻 Ghost score entre ${ghost.min} et ${ghost.max} pts</div></div>`}
       ${c.cancellation&&(g.entry.a.hole+g.entry.a.board+g.entry.b.hole+g.entry.b.board)>0?`<div style="background:#0d0d0d;border-radius:10px;padding:8px 12px;margin-bottom:12px;border:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:11px;color:#555;">ACL Cancellation</div><div style="font-size:13px;font-weight:700;"><span style="color:${cA.s};">+${prev.a}</span><span style="color:#333;margin:0 6px;">|</span><span style="color:${cB.s};">+${prev.b}</span><span style="font-size:10px;color:#444;margin-left:6px;">(brut: ${g.entry.a.hole*3+g.entry.a.board}–${g.entry.b.hole*3+g.entry.b.board})</span></div></div>`:""}
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -640,6 +717,11 @@ window.skSaveRound=()=>{
   sk.showScore=false;
   if(winner&&winner!=="tie"){sk.allGames.push({date:new Date().toLocaleDateString("fr-FR"),nA:c.teamA.name,nB:c.teamB.name,sA:nA,sB:nB,winner:winner==="a"?c.teamA.name:c.teamB.name,rounds:hist.length});}
   renderSKGame();
+  // Animer les scores via flip
+  setTimeout(()=>{
+    if(pts.a>0||c.ghostMode) flipTo("sk-a", nA);
+    if(pts.b>0||c.ghostMode) flipTo("sk-b", nB);
+  }, 30);
 };
 
 // ════════════════════════════════════════
@@ -671,6 +753,15 @@ function loadTournoi(){
   onValue(ref(db,`tournois/${tournoiId}`),snap=>{
     if(!snap.exists()){tournoiId=null;localStorage.removeItem("cornhole_admin_id");renderHome();return;}
     tournoi=snap.val();renderTournoi();
+    // Animer les scores Firebase via flip
+    if(tournoi.matchs){
+      Object.entries(tournoi.matchs).forEach(([id,m])=>{
+        setTimeout(()=>{
+          flipTo(`t-${id}-a`, m.scoreA||0);
+          flipTo(`t-${id}-b`, m.scoreB||0);
+        }, 50);
+      });
+    }
   });
 }
 
@@ -715,7 +806,11 @@ function renderCarteTournoi(id,m){
   return`<div style="background:#111;border-radius:13px;padding:14px;margin-bottom:10px;border:1px solid #1e1e1e;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <div><div style="font-size:15px;font-weight:900;">${m.equipeA} <span style="color:#444;">vs</span> ${m.equipeB}</div>${m.terrain?`<div style="font-size:11px;color:#444;">${m.terrain} · ${m.winScore||21}pts · M${m.round||1}</div>`:""}</div>
-      <div><span style="font-size:32px;font-weight:900;color:#e63946;">${m.scoreA||0}</span><span style="color:#333;margin:0 4px;">–</span><span style="font-size:32px;font-weight:900;color:#1d6fa4;">${m.scoreB||0}</span></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        ${flipHTML(m.scoreA||0,"#e63946",44,`t-${id}-a`)}
+        <span style="color:#333;font-size:18px;font-weight:900;">–</span>
+        ${flipHTML(m.scoreB||0,"#1d6fa4",44,`t-${id}-b`)}
+      </div>
     </div>
     <div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;color:#444;margin-bottom:4px;"><span>Manche ${m.round||1}</span><span style="color:${sA&&sB?"#2e7d32":"#f4a100"};">${sA&&sB?"En attente de validation":"Saisie en cours..."}</span></div>

@@ -4,17 +4,83 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Cornhole — Classement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Oswald:wght@500;600;700&family=Stardos+Stencil:wght@400;700&family=Yellowtail&family=Libre+Franklin:wght@400;500;600&display=swap" rel="stylesheet"/>
   <script src="firebase-config.js?v=2"></script>
   <style>
+    :root{
+      --paper:#f1e4cf;--cream:#f7eedb;
+      --ink:#1d2944;--ink-soft:#2c3a58;
+      --accent:#e8654b;--gold:#caa047;--gold-deep:#a47f2d;
+    }
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#050505;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overflow:hidden;}
+    body{
+      background:var(--ink);color:var(--cream);
+      font-family:'Libre Franklin',sans-serif;
+      min-height:100vh;overflow:hidden;
+    }
+    body::after{
+      content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;
+      mix-blend-mode:multiply;opacity:.08;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16  0 0 0 0 0.10  0 0 0 0 0.04  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      background-size:220px 220px;
+    }
     @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
     @keyframes fade-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes champion-glow{0%,100%{box-shadow:0 0 40px #f4a10066}50%{box-shadow:0 0 80px #f4a100aa,0 0 120px #f4a10033}}
-    @keyframes rank1-shine{0%,100%{background-position:200% center}50%{background-position:-200% center}}
+    @keyframes champion-glow{0%,100%{box-shadow:0 0 40px rgba(202,160,71,.4)}50%{box-shadow:0 0 80px rgba(202,160,71,.7),0 0 120px rgba(202,160,71,.2)}}
+    @keyframes pulse-gold{0%,100%{opacity:.6}50%{opacity:1}}
     .fade-in{animation:fade-in .4s ease forwards;}
-    .rank-1{animation:champion-glow 2s ease-in-out infinite;}
+    .rank-1-glow{animation:champion-glow 2.5s ease-in-out infinite;}
+
+    .tv-header{
+      background:var(--ink);border-bottom:3px double var(--gold);
+      padding:14px 36px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+    }
+    .tv-wordmark{display:flex;align-items:flex-end;gap:10px;}
+    .tv-wordmark-script{font-family:'Yellowtail',cursive;font-size:22px;color:var(--gold);line-height:1;}
+    .tv-wordmark-title{font-family:'Alfa Slab One',serif;font-size:26px;text-transform:uppercase;letter-spacing:.02em;line-height:1;}
+    .tv-event{font-family:'Alfa Slab One',serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.02em;}
+
+    /* Standings rows */
+    .st-row{
+      border:1.5px solid rgba(247,238,219,.12);
+      padding:12px 18px;display:flex;align-items:center;gap:14px;
+    }
+    .st-row.st-gold{border-color:var(--gold);background:rgba(202,160,71,.06);}
+    .st-row.st-silver{border-color:rgba(180,180,180,.3);background:rgba(180,180,180,.04);}
+    .st-row.st-bronze{border-color:rgba(180,120,50,.3);background:rgba(180,120,50,.04);}
+
+    /* Live match panels */
+    .live-card{
+      border:1.5px solid rgba(232,101,75,.4);
+      padding:12px 16px;
+      background:rgba(232,101,75,.05);
+    }
+
+    /* Done match panels */
+    .done-card{
+      border:1px solid rgba(247,238,219,.08);
+      padding:10px 14px;
+      opacity:.75;
+    }
+
+    /* TV ticker */
+    .tv-ticker{
+      height:44px;background:#12193a;border-top:2px solid var(--gold);
+      display:flex;align-items:center;overflow:hidden;flex-shrink:0;
+    }
+    .tv-ticker-label{
+      background:var(--gold);color:var(--ink);font-family:'Oswald',sans-serif;
+      font-size:11px;letter-spacing:.2em;padding:0 14px;height:100%;
+      display:flex;align-items:center;flex-shrink:0;border-right:2px solid var(--ink);
+    }
+    .tv-ticker-inner{display:flex;width:max-content;}
+    .tv-ticker-item{
+      font-family:'Oswald',sans-serif;font-size:14px;letter-spacing:.1em;
+      color:var(--cream);padding:0 32px;border-right:1px solid rgba(202,160,71,.3);
+      flex-shrink:0;display:flex;align-items:center;gap:10px;
+    }
   </style>
 </head>
 <body>
@@ -34,8 +100,8 @@
   if (!tournoiId) {
     document.getElementById("root").innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;">
-        <div style="font-size:32px;">🏆</div>
-        <div style="font-size:24px;font-weight:700;color:#555;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
+        <div style="font-family:'Yellowtail',cursive;font-size:28px;color:var(--gold);">Cornhole</div>
+        <div style="font-family:'Alfa Slab One',serif;font-size:20px;letter-spacing:.08em;opacity:.4;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
       </div>`;
   } else {
     onValue(ref(db, `tournois/${tournoiId}`), snap => {
@@ -47,63 +113,62 @@
 
   function render() {
     if (!tournoi) return;
-    const matchs = Object.entries(tournoi.matchs || {});
+    const matchs  = Object.entries(tournoi.matchs || {});
     const enCours = matchs.filter(([,m]) => m.statut !== "termine");
     const termines = matchs.filter(([,m]) => m.statut === "termine");
 
-    // Calculer classement
     const standings = calculerClassement(matchs);
     const champion  = termines.length > 0 && enCours.length === 0 ? standings[0] : null;
 
     document.getElementById("root").innerHTML = `
-      <div style="flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 50px);">
+      <div style="flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 44px);">
 
         <!-- Header -->
-        <div style="padding:20px 40px 16px;display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #111;">
-          <div>
-            <div style="font-size:12px;letter-spacing:4px;color:#444;">CORNHOLE SCOREKEEPER</div>
-            <div style="font-size:32px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
+        <div class="tv-header">
+          <div class="tv-wordmark">
+            <div class="tv-wordmark-script">Cornhole</div>
+            <div class="tv-wordmark-title">Field House</div>
           </div>
-          <div style="text-align:right;">
-            <div style="font-size:12px;color:#444;letter-spacing:2px;">MATCHS</div>
-            <div style="font-size:18px;font-weight:700;color:#aaa;">${termines.length}/${matchs.length} terminés</div>
+          <div class="tv-event">${tournoi.nom}</div>
+          <div style="font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:.2em;color:var(--gold);">
+            ${termines.length}/${matchs.length} TERMINÉS
           </div>
         </div>
 
         <!-- Champion banner si tournoi terminé -->
         ${champion ? `
-        <div style="margin:16px 40px;background:linear-gradient(135deg,#f4a100,#f77f00);border-radius:16px;padding:16px 24px;display:flex;align-items:center;gap:16px;" class="rank-1">
+        <div style="margin:20px 36px 0;background:var(--gold);border:2px solid var(--cream);padding:16px 28px;display:flex;align-items:center;gap:20px;" class="rank-1-glow">
           <div style="font-size:48px;">🏆</div>
           <div>
-            <div style="font-size:12px;letter-spacing:3px;color:rgba(0,0,0,.5);">CHAMPION</div>
-            <div style="font-size:36px;font-weight:900;color:#000;">${champion.nom}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.24em;color:var(--ink-soft);">CHAMPION DU TOURNOI</div>
+            <div style="font-family:'Alfa Slab One',serif;font-size:36px;color:var(--ink);text-transform:uppercase;line-height:1;">${champion.nom}</div>
           </div>
           <div style="margin-left:auto;text-align:right;">
-            <div style="font-size:12px;color:rgba(0,0,0,.5);">${champion.v}V · ${champion.d}D</div>
-            <div style="font-size:28px;font-weight:900;color:#000;">${champion.pts} pts</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;color:var(--ink-soft);">${champion.v}V · ${champion.d}D</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:40px;color:var(--ink);line-height:1;">${champion.pts} pts</div>
           </div>
         </div>` : ""}
 
-        <!-- Corps principal : classement + matchs en cours -->
-        <div style="flex:1;display:flex;gap:20px;padding:16px 40px 0;overflow:hidden;">
+        <!-- Corps : classement + matchs -->
+        <div style="flex:1;display:flex;gap:0;padding:20px 36px 0;overflow:hidden;">
 
-          <!-- Classement général -->
-          <div style="flex:1;display:flex;flex-direction:column;gap:0;">
-            <div style="font-size:11px;letter-spacing:3px;color:#444;margin-bottom:12px;">CLASSEMENT GÉNÉRAL</div>
-            <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+          <!-- Classement -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:0;overflow-y:auto;padding-right:20px;">
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.24em;color:var(--gold);margin-bottom:12px;">CLASSEMENT GÉNÉRAL</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
               ${standings.map((s, i) => renderRangée(s, i)).join("")}
             </div>
           </div>
 
-          <!-- Séparateur vertical -->
-          <div style="width:1px;background:#111;flex-shrink:0;"></div>
+          <!-- Séparateur -->
+          <div style="width:2px;background:rgba(202,160,71,.2);flex-shrink:0;"></div>
 
-          <!-- Matchs en cours / récents -->
-          <div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;">
-            <div style="font-size:11px;letter-spacing:3px;color:#444;margin-bottom:12px;">
+          <!-- Matchs -->
+          <div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;padding-left:20px;overflow-y:auto;">
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.24em;color:var(--gold);margin-bottom:12px;">
               ${enCours.length > 0 ? "MATCHS EN COURS" : "DERNIERS MATCHS"}
             </div>
-            <div style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;">
+            <div style="display:flex;flex-direction:column;gap:8px;">
               ${enCours.length > 0
                 ? enCours.map(([id,m]) => renderMatchLive(id, m)).join("")
                 : termines.slice(-6).reverse().map(([id,m]) => renderMatchTermine(id, m)).join("")
@@ -118,50 +183,43 @@
 
   function renderRangée(s, i) {
     const medals = ["🥇","🥈","🥉"];
-    const bgColors = [
-      "linear-gradient(135deg,#f4a10015,#f77f0010)",
-      "linear-gradient(135deg,#aaaaaa10,#88888808)",
-      "linear-gradient(135deg,#cd7f3210,#a0522d08)",
-    ];
-    const borderColors = ["#f4a10040","#aaaaaa25","#cd7f3225","#1a1a1a"];
+    const rowClass = i === 0 ? "st-row st-gold rank-1-glow" : i === 1 ? "st-row st-silver" : i === 2 ? "st-row st-bronze" : "st-row";
     const pct = s.j > 0 ? Math.round((s.v / s.j) * 100) : 0;
-    const isFirst = i === 0;
+    const nameColor = i === 0 ? "var(--gold)" : "var(--cream)";
+    const statColor = i === 0 ? "var(--gold)" : "rgba(247,238,219,.7)";
 
     return `
-      <div style="background:${bgColors[i]||"transparent"};border-radius:14px;padding:14px 18px;border:1px solid ${borderColors[Math.min(i,3)]};display:flex;align-items:center;gap:14px;${isFirst?"animation:champion-glow 2.5s ease-in-out infinite;":""}" class="fade-in">
-        <!-- Rang -->
-        <div style="width:44px;text-align:center;flex-shrink:0;">
+      <div class="${rowClass} fade-in">
+        <div style="width:40px;text-align:center;flex-shrink:0;">
           ${i < 3
-            ? `<div style="font-size:32px;">${medals[i]}</div>`
-            : `<div style="font-size:28px;font-weight:900;color:#333;">${i+1}</div>`
+            ? `<div style="font-size:28px;">${medals[i]}</div>`
+            : `<div style="font-family:'Alfa Slab One',serif;font-size:26px;opacity:.3;">${i+1}</div>`
           }
         </div>
 
-        <!-- Nom + barre -->
         <div style="flex:1;min-width:0;">
-          <div style="font-size:22px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isFirst?"#f4a100":"#fff"};">${s.nom}</div>
-          <div style="background:#0a0a0a;border-radius:4px;height:4px;margin-top:6px;overflow:hidden;">
-            <div style="width:${pct}%;background:${isFirst?"#f4a100":"#555"};height:4px;border-radius:4px;transition:width .8s ease;"></div>
+          <div style="font-family:'Alfa Slab One',serif;font-size:20px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${nameColor};">${s.nom}</div>
+          <div style="height:3px;background:rgba(247,238,219,.1);margin-top:6px;overflow:hidden;">
+            <div style="width:${pct}%;height:3px;background:${i===0?"var(--gold)":"rgba(247,238,219,.4)"};transition:width .8s;"></div>
           </div>
         </div>
 
-        <!-- Stats -->
-        <div style="display:flex;gap:16px;flex-shrink:0;text-align:center;">
+        <div style="display:flex;gap:14px;flex-shrink:0;text-align:center;">
           <div>
-            <div style="font-size:28px;font-weight:900;color:#2e7d32;">${s.v}</div>
-            <div style="font-size:10px;color:#444;letter-spacing:1px;">VICTOIRES</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:#6fcf97;">${s.v}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:.16em;color:${statColor};">VIC</div>
           </div>
           <div>
-            <div style="font-size:28px;font-weight:900;color:#e63946;">${s.d}</div>
-            <div style="font-size:10px;color:#444;letter-spacing:1px;">DÉFAITES</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:var(--accent);">${s.d}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:.16em;color:${statColor};">DÉF</div>
           </div>
           <div>
-            <div style="font-size:28px;font-weight:900;color:#f4a100;">${s.pts}</div>
-            <div style="font-size:10px;color:#444;letter-spacing:1px;">POINTS</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:var(--gold);">${s.pts}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:.16em;color:${statColor};">PTS</div>
           </div>
           <div>
-            <div style="font-size:28px;font-weight:900;color:${s.diff>=0?"#4caf50":"#e63946"};">${s.diff>=0?"+":""}${s.diff}</div>
-            <div style="font-size:10px;color:#444;letter-spacing:1px;">DIFF</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:${s.diff>=0?"#6fcf97":"var(--accent)"};">${s.diff>=0?"+":""}${s.diff}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:.16em;color:${statColor};">DIFF</div>
           </div>
         </div>
       </div>`;
@@ -171,29 +229,30 @@
     const mc = m.manche_courante;
     const saisie = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
     const validation = mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis;
+    const scoreA = m.scoreA||0, scoreB = m.scoreB||0, win = m.winScore||21;
     return `
-      <div style="background:#0d0d0d;border-radius:12px;padding:14px;border:1px solid #1a1a1a;" class="fade-in">
+      <div class="live-card fade-in">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          ${m.terrain ? `<div style="font-size:10px;color:#444;letter-spacing:1px;">${m.terrain}</div>` : `<div></div>`}
-          <div style="font-size:10px;color:${saisie?"#f4a100":validation?"#2e7d32":"#444"};letter-spacing:1px;">
+          ${m.terrain ? `<div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.18em;color:var(--gold);">${m.terrain}</div>` : `<div></div>`}
+          <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.14em;color:${saisie?"var(--accent)":validation?"#6fcf97":"rgba(247,238,219,.4)"};animation:pulse-gold 1.4s ease-in-out infinite;">
             ${saisie?"⚡ EN SAISIE":validation?"🔄 VALIDATION":"R${m.round||1}"}
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="flex:1;">
-            <div style="font-size:16px;font-weight:800;">${m.equipeA}</div>
-            <div style="font-size:40px;font-weight:900;color:#e63946;line-height:1;">${m.scoreA||0}</div>
+            <div style="font-family:'Alfa Slab One',serif;font-size:15px;text-transform:uppercase;">${m.equipeA}</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:44px;line-height:1;color:${scoreA>scoreB?"var(--gold)":"var(--cream)"};">${String(scoreA).padStart(2,"0")}</div>
           </div>
-          <div style="font-size:20px;color:#222;font-weight:900;">VS</div>
+          <div style="font-family:'Alfa Slab One',serif;font-size:18px;opacity:.2;">VS</div>
           <div style="flex:1;text-align:right;">
-            <div style="font-size:16px;font-weight:800;">${m.equipeB}</div>
-            <div style="font-size:40px;font-weight:900;color:#1d6fa4;line-height:1;">${m.scoreB||0}</div>
+            <div style="font-family:'Alfa Slab One',serif;font-size:15px;text-transform:uppercase;">${m.equipeB}</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:44px;line-height:1;color:${scoreB>scoreA?"var(--gold)":"var(--cream)"};">${String(scoreB).padStart(2,"0")}</div>
           </div>
         </div>
-        <div style="background:#111;border-radius:4px;height:4px;margin-top:8px;overflow:hidden;display:flex;">
-          <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#e63946;transition:width .8s;"></div>
-          <div style="flex:1;background:#0a0a0a;"></div>
-          <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#1d6fa4;transition:width .8s;"></div>
+        <div style="display:flex;height:3px;margin-top:8px;gap:2px;">
+          <div style="width:${Math.min((scoreA/win)*100,100)}%;background:var(--gold);transition:width .8s;"></div>
+          <div style="flex:1;background:rgba(247,238,219,.08);"></div>
+          <div style="width:${Math.min((scoreB/win)*100,100)}%;background:var(--accent);transition:width .8s;"></div>
         </div>
       </div>`;
   }
@@ -201,18 +260,22 @@
   function renderMatchTermine(id, m) {
     const winA = (m.scoreA||0) > (m.scoreB||0);
     return `
-      <div style="background:#0a0a0a;border-radius:12px;padding:12px 14px;border:1px solid #111;opacity:.8;" class="fade-in">
+      <div class="done-card fade-in">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="flex:1;">
-            <div style="font-size:15px;font-weight:${winA?900:600};color:${winA?"#fff":"#555"};">${m.equipeA} ${winA?"🏆":""}</div>
+            <div style="font-family:'Alfa Slab One',serif;font-size:14px;text-transform:uppercase;color:${winA?"var(--gold)":"rgba(247,238,219,.4)"};">
+              ${winA?"★ ":""}${m.equipeA}
+            </div>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-            <span style="font-size:28px;font-weight:900;color:#e63946;">${m.scoreA||0}</span>
-            <span style="font-size:16px;color:#222;">–</span>
-            <span style="font-size:28px;font-weight:900;color:#1d6fa4;">${m.scoreB||0}</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+            <span style="font-family:'Stardos Stencil',sans-serif;font-size:32px;color:${winA?"var(--gold)":"rgba(247,238,219,.5)"};">${m.scoreA||0}</span>
+            <span style="font-family:'Alfa Slab One',serif;font-size:16px;opacity:.2;">–</span>
+            <span style="font-family:'Stardos Stencil',sans-serif;font-size:32px;color:${!winA?"var(--gold)":"rgba(247,238,219,.5)"};">${m.scoreB||0}</span>
           </div>
           <div style="flex:1;text-align:right;">
-            <div style="font-size:15px;font-weight:${!winA?900:600};color:${!winA?"#fff":"#555"};">${!winA?"🏆":""} ${m.equipeB}</div>
+            <div style="font-family:'Alfa Slab One',serif;font-size:14px;text-transform:uppercase;color:${!winA?"var(--gold)":"rgba(247,238,219,.4)"};">
+              ${m.equipeB}${!winA?" ★":""}
+            </div>
           </div>
         </div>
       </div>`;
@@ -247,17 +310,34 @@
     const sponsors = (tournoi.sponsors || []).filter(s => s.name);
     if (!sponsors.length) return;
     const ticker = document.createElement("div");
-    ticker.style.cssText = "height:50px;background:#0a0a0a;border-top:1px solid #111;display:flex;align-items:center;overflow:hidden;flex-shrink:0;";
+    ticker.className = "tv-ticker";
+    const label = document.createElement("div");
+    label.className = "tv-ticker-label";
+    label.textContent = "SPONSORS";
+    ticker.appendChild(label);
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "flex:1;overflow:hidden;";
     const inner = document.createElement("div");
-    inner.style.cssText = `display:flex;animation:ticker ${sponsors.length*5}s linear infinite;width:max-content;`;
-    [...sponsors,...sponsors].forEach(s => {
+    inner.className = "tv-ticker-inner";
+    inner.style.animation = `ticker ${sponsors.length * 5}s linear infinite`;
+    [...sponsors, ...sponsors].forEach(s => {
       const item = document.createElement("div");
-      item.style.cssText = "display:flex;align-items:center;gap:10px;padding:0 32px;border-right:1px solid #111;flex-shrink:0;";
-      if (s.logo) { const img = document.createElement("img"); img.src=s.logo; img.style.cssText="height:28px;width:auto;object-fit:contain;opacity:.6;"; item.appendChild(img); }
-      if (s.name) { const span = document.createElement("span"); span.style.cssText="font-size:15px;font-weight:700;color:#333;letter-spacing:2px;white-space:nowrap;"; span.textContent=s.name; item.appendChild(span); }
+      item.className = "tv-ticker-item";
+      if (s.logo) {
+        const img = document.createElement("img");
+        img.src = s.logo;
+        img.style.cssText = "height:24px;width:auto;object-fit:contain;opacity:.6;";
+        item.appendChild(img);
+      }
+      if (s.name) {
+        const span = document.createElement("span");
+        span.textContent = s.name;
+        item.appendChild(span);
+      }
       inner.appendChild(item);
     });
-    ticker.appendChild(inner);
+    wrap.appendChild(inner);
+    ticker.appendChild(wrap);
     document.getElementById("root").appendChild(ticker);
   }
 </script>

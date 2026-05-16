@@ -4,17 +4,103 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Cornhole — Scoreboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Oswald:wght@500;600;700&family=Stardos+Stencil:wght@400;700&family=Yellowtail&family=Libre+Franklin:wght@400;500;600&display=swap" rel="stylesheet"/>
   <script src="firebase-config.js?v=2"></script>
   <style>
+    :root{
+      --paper:#f1e4cf;--cream:#f7eedb;
+      --ink:#1d2944;--ink-soft:#2c3a58;
+      --accent:#e8654b;--gold:#caa047;--gold-deep:#a47f2d;
+    }
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#050505;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overflow:hidden;}
-    @keyframes score-pop{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
+    body{
+      background:var(--ink);color:var(--cream);
+      font-family:'Libre Franklin',sans-serif;
+      min-height:100vh;overflow:hidden;
+    }
+    body::after{
+      content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;
+      mix-blend-mode:multiply;opacity:.08;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16  0 0 0 0 0.10  0 0 0 0 0.04  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      background-size:220px 220px;
+    }
+    @keyframes score-pop{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
     @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
     @keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes pulse-border{0%,100%{opacity:.4}50%{opacity:1}}
-    .score-anim{animation:score-pop .4s ease}
-    .fade-in{animation:fade-in .5s ease forwards}
+    @keyframes pulse-gold{0%,100%{opacity:.6}50%{opacity:1}}
+    .score-anim{animation:score-pop .35s ease}
+    .fade-in{animation:fade-in .4s ease forwards}
+
+    /* TV Header */
+    .tv-header{
+      background:var(--ink);
+      border-bottom:3px double var(--gold);
+      padding:14px 36px;
+      display:flex;align-items:center;justify-content:space-between;
+      flex-shrink:0;
+    }
+    .tv-wordmark{display:flex;align-items:flex-end;gap:10px;}
+    .tv-wordmark-script{font-family:'Yellowtail',cursive;font-size:22px;color:var(--gold);line-height:1;}
+    .tv-wordmark-title{font-family:'Alfa Slab One',serif;font-size:26px;text-transform:uppercase;letter-spacing:.02em;line-height:1;}
+    .tv-event{font-family:'Alfa Slab One',serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.02em;}
+    .tv-round-box{background:var(--gold);color:var(--ink);font-family:'Oswald',sans-serif;font-weight:700;font-size:13px;letter-spacing:.18em;padding:5px 13px;border:1.5px solid var(--cream);}
+
+    /* Plank score panels (TV-size) */
+    .tv-plank{
+      background:var(--ink-soft);border:2px solid var(--cream);
+      position:relative;padding:20px 24px;
+      display:flex;flex-direction:column;align-items:center;text-align:center;
+      overflow:hidden;flex:1;
+    }
+    .tv-plank::before{content:"";position:absolute;inset:5px;border:1px dashed rgba(202,160,71,.3);pointer-events:none;}
+    .tv-plank--lead{background:var(--accent);}
+    .tv-plank-team{font-family:'Alfa Slab One',serif;font-size:22px;letter-spacing:.03em;text-transform:uppercase;line-height:1;margin-bottom:6px;}
+    .tv-plank-digits{font-family:'Stardos Stencil',sans-serif;line-height:.85;color:var(--cream);text-shadow:3px 3px 0 rgba(0,0,0,.25);}
+    .tv-plank-goal{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.14em;opacity:.55;margin-top:4px;}
+    .tv-plank-bar{width:90%;height:6px;background:rgba(255,255,255,.15);margin-top:14px;}
+    .tv-plank-bar-fill{height:100%;background:var(--gold);transition:width .8s ease;}
+    .tv-plank-pennant{
+      position:absolute;top:10px;right:-1px;
+      background:var(--gold);color:var(--ink);
+      font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.14em;
+      padding:4px 9px;border:1.5px solid var(--ink);
+    }
+    /* VS separator */
+    .tv-vs{
+      font-family:'Alfa Slab One',serif;font-size:52px;color:rgba(247,238,219,.12);
+      padding:0 28px;flex-shrink:0;text-align:center;display:flex;
+      flex-direction:column;align-items:center;justify-content:center;
+    }
+    .tv-vs-terrain{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.2em;color:var(--gold);margin-top:8px;}
+    .tv-vs-status{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;color:var(--accent);margin-top:6px;animation:pulse-gold 1.4s ease-in-out infinite;}
+
+    /* Grid card */
+    .tv-card{
+      background:var(--ink-soft);border:2px solid var(--cream);
+      padding:20px;display:flex;flex-direction:column;gap:10px;
+      position:relative;
+    }
+    .tv-card::before{content:"";position:absolute;inset:5px;border:1px dashed rgba(202,160,71,.25);pointer-events:none;}
+
+    /* Ticker */
+    .tv-ticker{
+      height:44px;background:#12193a;border-top:2px solid var(--gold);
+      display:flex;align-items:center;overflow:hidden;flex-shrink:0;
+    }
+    .tv-ticker-label{
+      background:var(--gold);color:var(--ink);
+      font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.2em;
+      padding:0 14px;height:100%;display:flex;align-items:center;flex-shrink:0;
+      border-right:2px solid var(--ink);
+    }
+    .tv-ticker-inner{display:flex;width:max-content;}
+    .tv-ticker-item{
+      font-family:'Oswald',sans-serif;font-size:14px;letter-spacing:.1em;
+      color:var(--cream);padding:0 32px;border-right:1px solid rgba(202,160,71,.3);
+      flex-shrink:0;display:flex;align-items:center;gap:10px;
+    }
   </style>
 </head>
 <body>
@@ -35,8 +121,8 @@
   if (!tournoiId) {
     document.getElementById("root").innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;">
-        <div style="font-size:32px;">📺</div>
-        <div style="font-size:24px;font-weight:700;color:#555;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
+        <div style="font-family:'Yellowtail',cursive;font-size:28px;color:var(--gold);">Cornhole</div>
+        <div style="font-family:'Alfa Slab One',serif;font-size:20px;letter-spacing:.08em;opacity:.4;">Ajoute ?t=ID_TOURNOI dans l'URL</div>
       </div>`;
   } else {
     onValue(ref(db, `tournois/${tournoiId}`), snap => {
@@ -64,7 +150,6 @@
       root.innerHTML = renderListe(matchs);
     }
 
-    // Animer les scores changés
     matchs.forEach(([id, m]) => {
       const prev = prevScores[id] || { a: -1, b: -1 };
       if (m.scoreA !== prev.a) animerScore(`score-a-${id}`);
@@ -72,7 +157,6 @@
       prevScores[id] = { a: m.scoreA||0, b: m.scoreB||0 };
     });
 
-    // Sponsors ticker
     renderSponsors();
   }
 
@@ -84,74 +168,69 @@
     el.classList.add("score-anim");
   }
 
+  function tvHeader(nom, extra = "") {
+    return `
+      <div class="tv-header">
+        <div class="tv-wordmark">
+          <div class="tv-wordmark-script">Cornhole</div>
+          <div class="tv-wordmark-title">Field House</div>
+        </div>
+        <div class="tv-event">${nom}</div>
+        ${extra}
+      </div>`;
+  }
+
   // ── 1 match → plein écran ──
   function renderPleinEcran(id, m) {
     const mc = m.manche_courante;
     const saisieEnCours = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
-    const attentConf    = mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis && (mc.confirmation_A === null || mc.confirmation_A === undefined || mc.confirmation_B === null || mc.confirmation_B === undefined);
+    const attentConf    = mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis &&
+                          (mc.confirmation_A == null || mc.confirmation_B == null);
+
+    const scoreA = m.scoreA||0, scoreB = m.scoreB||0, win = m.winScore||21;
+    const leadA = scoreA > scoreB, leadB = scoreB > scoreA;
 
     return `
       <div style="flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 60px);">
+        ${tvHeader(tournoi.nom, `<div class="tv-round-box">MANCHE ${m.round||1}</div>`)}
 
-        <!-- Header tournoi -->
-        <div style="padding:20px 40px 0;display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:13px;letter-spacing:4px;color:#444;">CORNHOLE SCOREKEEPER</div>
-            <div style="font-size:22px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:13px;color:#444;letter-spacing:2px;">MANCHE</div>
-            <div style="font-size:40px;font-weight:900;line-height:1;">${m.round||1}</div>
-          </div>
-        </div>
-
-        <!-- Scores principaux -->
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:0;padding:20px 40px;">
-
+        <div style="flex:1;display:flex;align-items:stretch;padding:32px 48px;gap:0;">
           <!-- Équipe A -->
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#7f0000,#e63946);border-radius:24px;padding:40px 20px;position:relative;overflow:hidden;">
-            <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.05);"></div>
-            <div style="font-size:20px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.7);margin-bottom:8px;text-transform:uppercase;">${m.equipeA}</div>
-            <div id="score-a-${id}" style="font-size:160px;font-weight:900;line-height:.9;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,.5);">${m.scoreA||0}</div>
-            <div style="font-size:18px;color:rgba(255,255,255,.35);margin-top:8px;">/ ${m.winScore||21} pts</div>
-            <div style="width:80%;background:rgba(0,0,0,.3);border-radius:8px;height:8px;margin-top:16px;">
-              <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#fff;border-radius:8px;height:8px;opacity:.8;transition:width .8s ease;"></div>
-            </div>
+          <div class="tv-plank ${leadA ? 'tv-plank--lead' : ''}" style="padding:40px 32px;">
+            ${leadA ? '<div class="tv-plank-pennant">★ EN TÊTE</div>' : ""}
+            <div class="tv-plank-team" style="font-size:28px;">${m.equipeA}</div>
+            <div id="score-a-${id}" class="tv-plank-digits" style="font-size:200px;margin:12px 0 8px;">${String(scoreA).padStart(2,"0")}</div>
+            <div class="tv-plank-goal">/ ${win} pts</div>
+            <div class="tv-plank-bar" style="width:80%;"><div class="tv-plank-bar-fill" style="width:${Math.min((scoreA/win)*100,100)}%;"></div></div>
           </div>
 
-          <!-- Séparateur -->
-          <div style="padding:0 30px;text-align:center;flex-shrink:0;">
-            <div style="font-size:80px;font-weight:900;color:#222;">VS</div>
-            ${m.terrain ? `<div style="font-size:14px;color:#444;letter-spacing:2px;margin-top:4px;">${m.terrain}</div>` : ""}
-            <!-- Statut manche -->
-            <div style="margin-top:16px;">
-              ${saisieEnCours ? `<div style="font-size:13px;color:#f4a100;letter-spacing:2px;animation:pulse-border 1.5s ease-in-out infinite;">⚡ SAISIE EN COURS</div>` : ""}
-              ${attentConf   ? `<div style="font-size:13px;color:#2e7d32;letter-spacing:2px;animation:pulse-border 1.5s ease-in-out infinite;">🔄 VALIDATION...</div>` : ""}
-            </div>
+          <!-- VS -->
+          <div class="tv-vs">
+            VS
+            ${m.terrain ? `<div class="tv-vs-terrain">${m.terrain}</div>` : ""}
+            ${saisieEnCours ? `<div class="tv-vs-status">⚡ SAISIE</div>` : ""}
+            ${attentConf   ? `<div class="tv-vs-status">🔄 VALIDATION</div>` : ""}
           </div>
 
           <!-- Équipe B -->
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#0d47a1,#1d6fa4);border-radius:24px;padding:40px 20px;position:relative;overflow:hidden;">
-            <div style="position:absolute;top:-40px;left:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.05);"></div>
-            <div style="font-size:20px;font-weight:800;letter-spacing:4px;color:rgba(255,255,255,.7);margin-bottom:8px;text-transform:uppercase;">${m.equipeB}</div>
-            <div id="score-b-${id}" style="font-size:160px;font-weight:900;line-height:.9;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,.5);">${m.scoreB||0}</div>
-            <div style="font-size:18px;color:rgba(255,255,255,.35);margin-top:8px;">/ ${m.winScore||21} pts</div>
-            <div style="width:80%;background:rgba(0,0,0,.3);border-radius:8px;height:8px;margin-top:16px;">
-              <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#fff;border-radius:8px;height:8px;opacity:.8;transition:width .8s ease;"></div>
-            </div>
+          <div class="tv-plank ${leadB ? 'tv-plank--lead' : ''}" style="padding:40px 32px;">
+            ${leadB ? '<div class="tv-plank-pennant">★ EN TÊTE</div>' : ""}
+            <div class="tv-plank-team" style="font-size:28px;">${m.equipeB}</div>
+            <div id="score-b-${id}" class="tv-plank-digits" style="font-size:200px;margin:12px 0 8px;">${String(scoreB).padStart(2,"0")}</div>
+            <div class="tv-plank-goal">/ ${win} pts</div>
+            <div class="tv-plank-bar" style="width:80%;"><div class="tv-plank-bar-fill" style="width:${Math.min((scoreB/win)*100,100)}%;"></div></div>
           </div>
         </div>
 
-        <!-- Détail manche courante -->
         ${mc && mc.sacs_A?.soumis && mc.sacs_B?.soumis ? `
-        <div style="padding:0 40px 20px;display:flex;gap:12px;">
-          <div style="flex:1;background:#111;border-radius:12px;padding:12px 16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-size:12px;color:#555;letter-spacing:1px;">MANCHE EN COURS · ${m.equipeA}</div>
-            <div style="font-size:24px;font-weight:900;color:#e63946;">+${(mc.sacs_A?.trou||0)*3+(mc.sacs_A?.plateau||0)}</div>
+        <div style="padding:0 48px 24px;display:flex;gap:12px;">
+          <div style="flex:1;background:rgba(247,238,219,.06);border:1.5px solid rgba(202,160,71,.3);padding:10px 18px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;opacity:.6;">${m.equipeA} · MANCHE</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:var(--gold);">+${(mc.sacs_A?.trou||0)*3+(mc.sacs_A?.plateau||0)}</div>
           </div>
-          <div style="flex:1;background:#111;border-radius:12px;padding:12px 16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-size:12px;color:#555;letter-spacing:1px;">MANCHE EN COURS · ${m.equipeB}</div>
-            <div style="font-size:24px;font-weight:900;color:#1d6fa4;">+${(mc.sacs_B?.trou||0)*3+(mc.sacs_B?.plateau||0)}</div>
+          <div style="flex:1;background:rgba(247,238,219,.06);border:1.5px solid rgba(202,160,71,.3);padding:10px 18px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;opacity:.6;">${m.equipeB} · MANCHE</div>
+            <div style="font-family:'Stardos Stencil',sans-serif;font-size:28px;color:var(--gold);">+${(mc.sacs_B?.trou||0)*3+(mc.sacs_B?.plateau||0)}</div>
           </div>
         </div>` : ""}
       </div>`;
@@ -159,15 +238,10 @@
 
   // ── 2-4 matchs → grille ──
   function renderGrille(matchs) {
-    const cols = matchs.length === 2 ? 1 : 2;
+    const cols = matchs.length <= 2 ? 1 : 2;
     return `
-      <div style="padding:16px 20px 0;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div style="font-size:28px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
-          <div style="font-size:13px;color:#444;letter-spacing:2px;">${matchs.length} MATCHS EN COURS</div>
-        </div>
-      </div>
-      <div style="flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;padding:0 20px 16px;">
+      ${tvHeader(tournoi.nom, `<div style="font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--gold);">${matchs.length} MATCHS</div>`)}
+      <div style="flex:1;display:grid;grid-template-columns:repeat(${cols},1fr);gap:16px;padding:20px 28px 20px;">
         ${matchs.map(([id,m]) => renderCarteMatch(id, m)).join("")}
       </div>`;
   }
@@ -175,61 +249,66 @@
   function renderCarteMatch(id, m) {
     const mc = m.manche_courante;
     const enSaisie = mc && (!mc.sacs_A?.soumis || !mc.sacs_B?.soumis);
+    const scoreA = m.scoreA||0, scoreB = m.scoreB||0, win = m.winScore||21;
+    const leadA = scoreA > scoreB, leadB = scoreB > scoreA;
+
     return `
-      <div style="background:#0d0d0d;border-radius:20px;padding:20px;border:1px solid #1a1a1a;display:flex;flex-direction:column;gap:12px;position:relative;" class="fade-in">
-        ${m.terrain ? `<div style="position:absolute;top:12px;right:14px;font-size:11px;color:#444;letter-spacing:1px;">${m.terrain}</div>` : ""}
-        <div style="font-size:11px;color:#444;letter-spacing:2px;">MANCHE ${m.round||1} ${enSaisie?"· ⚡":""}</div>
-
-        <!-- Équipe A -->
-        <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7f000033,#e6394622);border-radius:12px;padding:12px 16px;">
-          <div style="font-size:18px;font-weight:800;color:#fff;">${m.equipeA}</div>
-          <div id="score-a-${id}" style="font-size:56px;font-weight:900;color:#e63946;line-height:1;">${m.scoreA||0}</div>
+      <div class="tv-card fade-in">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.2em;color:var(--gold);">${m.terrain ? m.terrain + " · " : ""}MANCHE ${m.round||1}</div>
+          ${enSaisie ? `<div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.14em;color:var(--accent);animation:pulse-gold 1.4s ease-in-out infinite;">⚡ SAISIE</div>` : ""}
         </div>
 
-        <!-- Barre de progression -->
-        <div style="background:#111;border-radius:6px;height:6px;overflow:hidden;">
-          <div style="width:${Math.min(((m.scoreA||0)/(m.winScore||21))*100,100)}%;background:#e63946;height:6px;transition:width .8s;border-radius:6px 0 0 6px;display:inline-block;"></div>
-          <div style="width:${Math.min(((m.scoreB||0)/(m.winScore||21))*100,100)}%;background:#1d6fa4;height:6px;transition:width .8s;border-radius:0 6px 6px 0;display:inline-block;float:right;"></div>
+        <div style="display:flex;gap:10px;">
+          <!-- Plank A -->
+          <div class="tv-plank ${leadA ? 'tv-plank--lead' : ''}" style="padding:14px;">
+            ${leadA ? '<div class="tv-plank-pennant" style="font-size:8px;padding:2px 6px;">★</div>' : ""}
+            <div class="tv-plank-team" style="font-size:15px;">${m.equipeA}</div>
+            <div id="score-a-${id}" class="tv-plank-digits" style="font-size:72px;">${String(scoreA).padStart(2,"0")}</div>
+            <div class="tv-plank-bar" style="width:85%;height:4px;margin-top:8px;"><div class="tv-plank-bar-fill" style="width:${Math.min((scoreA/win)*100,100)}%;"></div></div>
+          </div>
+          <!-- Plank B -->
+          <div class="tv-plank ${leadB ? 'tv-plank--lead' : ''}" style="padding:14px;">
+            ${leadB ? '<div class="tv-plank-pennant" style="font-size:8px;padding:2px 6px;">★</div>' : ""}
+            <div class="tv-plank-team" style="font-size:15px;">${m.equipeB}</div>
+            <div id="score-b-${id}" class="tv-plank-digits" style="font-size:72px;">${String(scoreB).padStart(2,"0")}</div>
+            <div class="tv-plank-bar" style="width:85%;height:4px;margin-top:8px;"><div class="tv-plank-bar-fill" style="width:${Math.min((scoreB/win)*100,100)}%;"></div></div>
+          </div>
         </div>
 
-        <!-- Équipe B -->
-        <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0d47a133,#1d6fa422);border-radius:12px;padding:12px 16px;">
-          <div style="font-size:18px;font-weight:800;color:#fff;">${m.equipeB}</div>
-          <div id="score-b-${id}" style="font-size:56px;font-weight:900;color:#1d6fa4;line-height:1;">${m.scoreB||0}</div>
-        </div>
-
-        <div style="font-size:11px;color:#333;text-align:center;">/ ${m.winScore||21} pts</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.14em;opacity:.4;text-align:center;">/ ${win} pts</div>
       </div>`;
   }
 
   // ── 5+ matchs → liste compacte ──
   function renderListe(matchs) {
     return `
-      <div style="padding:16px 24px 0;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="font-size:26px;font-weight:900;color:#f4a100;">${tournoi.nom}</div>
-        <div style="font-size:13px;color:#444;letter-spacing:2px;">${matchs.length} MATCHS</div>
-      </div>
-      <div style="flex:1;padding:0 24px 16px;display:flex;flex-direction:column;gap:8px;">
-        ${matchs.map(([id,m]) => `
-          <div style="background:#0d0d0d;border-radius:14px;padding:14px 18px;border:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between;" class="fade-in">
-            ${m.terrain ? `<div style="font-size:11px;color:#444;width:80px;letter-spacing:1px;">${m.terrain}</div>` : `<div style="width:80px;"></div>`}
-            <div style="flex:1;font-size:18px;font-weight:800;text-align:right;padding-right:12px;">${m.equipeA}</div>
-            <div style="display:flex;gap:10px;align-items:center;">
-              <div id="score-a-${id}" style="font-size:40px;font-weight:900;color:#e63946;min-width:50px;text-align:center;">${m.scoreA||0}</div>
-              <div style="font-size:20px;color:#222;font-weight:900;">–</div>
-              <div id="score-b-${id}" style="font-size:40px;font-weight:900;color:#1d6fa4;min-width:50px;text-align:center;">${m.scoreB||0}</div>
+      ${tvHeader(tournoi.nom, `<div style="font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.2em;color:var(--gold);">${matchs.length} MATCHS</div>`)}
+      <div style="flex:1;padding:20px 36px;display:flex;flex-direction:column;gap:10px;">
+        ${matchs.map(([id,m]) => {
+          const scoreA = m.scoreA||0, scoreB = m.scoreB||0;
+          return `
+          <div style="border:1.5px solid rgba(247,238,219,.15);padding:12px 20px;display:flex;align-items:center;gap:16px;" class="fade-in">
+            ${m.terrain ? `<div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.2em;color:var(--gold);min-width:80px;">${m.terrain}</div>` : `<div style="min-width:80px;"></div>`}
+            <div style="flex:1;font-family:'Alfa Slab One',serif;font-size:17px;text-transform:uppercase;text-align:right;">${m.equipeA}</div>
+            <div style="display:flex;gap:12px;align-items:center;flex-shrink:0;">
+              <div id="score-a-${id}" style="font-family:'Stardos Stencil',sans-serif;font-size:48px;min-width:60px;text-align:center;">${String(scoreA).padStart(2,"0")}</div>
+              <div style="font-family:'Alfa Slab One',serif;font-size:20px;opacity:.2;">—</div>
+              <div id="score-b-${id}" style="font-family:'Stardos Stencil',sans-serif;font-size:48px;min-width:60px;text-align:center;">${String(scoreB).padStart(2,"0")}</div>
             </div>
-            <div style="flex:1;font-size:18px;font-weight:800;text-align:left;padding-left:12px;">${m.equipeB}</div>
-            <div style="font-size:11px;color:#333;width:60px;text-align:right;">R${m.round||1}</div>
-          </div>`).join("")}
+            <div style="flex:1;font-family:'Alfa Slab One',serif;font-size:17px;text-transform:uppercase;">${m.equipeB}</div>
+            <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.18em;color:var(--gold);min-width:40px;text-align:right;">R${m.round||1}</div>
+          </div>`;
+        }).join("")}
       </div>`;
   }
 
   function renderIdle() {
     return `
-      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
-        <div style="font-size:28px;color:#f4a100;font-weight:900;margin-bottom:6px;">${tournoi.nom}</div>
-        <div style="font-size:16px;color:#333;letter-spacing:2px;">EN ATTENTE DES MATCHS...</div>
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;">
+        <div style="font-family:'Yellowtail',cursive;font-size:42px;color:var(--gold);">Cornhole</div>
+        <div style="font-family:'Alfa Slab One',serif;font-size:26px;text-transform:uppercase;letter-spacing:.04em;">${tournoi.nom}</div>
+        <div style="font-family:'Oswald',sans-serif;font-size:14px;letter-spacing:.24em;opacity:.4;margin-top:6px;">EN ATTENTE DES MATCHS…</div>
       </div>`;
   }
 
@@ -237,17 +316,34 @@
     const sponsors = (tournoi.sponsors || []).filter(s => s.name);
     if (!sponsors.length) return;
     const ticker = document.createElement("div");
-    ticker.style.cssText = "height:50px;background:#0a0a0a;border-top:1px solid #1a1a1a;display:flex;align-items:center;overflow:hidden;flex-shrink:0;";
+    ticker.className = "tv-ticker";
+    const label = document.createElement("div");
+    label.className = "tv-ticker-label";
+    label.textContent = "SPONSORS";
+    ticker.appendChild(label);
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "flex:1;overflow:hidden;";
     const inner = document.createElement("div");
-    inner.style.cssText = `display:flex;animation:ticker ${sponsors.length*5}s linear infinite;width:max-content;`;
-    [...sponsors,...sponsors].forEach(s => {
+    inner.className = "tv-ticker-inner";
+    inner.style.animation = `ticker ${sponsors.length * 5}s linear infinite`;
+    [...sponsors, ...sponsors].forEach(s => {
       const item = document.createElement("div");
-      item.style.cssText = "display:flex;align-items:center;gap:10px;padding:0 32px;border-right:1px solid #1a1a1a;flex-shrink:0;";
-      if (s.logo) { const img = document.createElement("img"); img.src=s.logo; img.style.cssText="height:28px;width:auto;object-fit:contain;opacity:.7;"; item.appendChild(img); }
-      if (s.name) { const span = document.createElement("span"); span.style.cssText="font-size:16px;font-weight:700;color:#444;letter-spacing:2px;white-space:nowrap;"; span.textContent=s.name; item.appendChild(span); }
+      item.className = "tv-ticker-item";
+      if (s.logo) {
+        const img = document.createElement("img");
+        img.src = s.logo;
+        img.style.cssText = "height:24px;width:auto;object-fit:contain;opacity:.6;";
+        item.appendChild(img);
+      }
+      if (s.name) {
+        const span = document.createElement("span");
+        span.textContent = s.name;
+        item.appendChild(span);
+      }
       inner.appendChild(item);
     });
-    ticker.appendChild(inner);
+    wrap.appendChild(inner);
+    ticker.appendChild(wrap);
     document.getElementById("root").appendChild(ticker);
   }
 </script>

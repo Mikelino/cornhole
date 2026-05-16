@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <title>Cornhole — Rejoindre</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js?v=4"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    body{background:#0a0a0a;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overscroll-behavior:none;}
+    button,input,select{outline:none;font-family:'Barlow Condensed',sans-serif;}
+    @keyframes winner-in{from{transform:translateY(60px) scale(.9);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+    @keyframes trophy-bounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-14px)}70%{transform:translateY(-8px)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    @keyframes flip-top{0%{transform:rotateX(0deg)}100%{transform:rotateX(-90deg)}}
+    @keyframes flip-bot{0%{transform:rotateX(90deg)}100%{transform:rotateX(0deg)}}
+    .last-round{animation:pulse 1.2s ease-in-out infinite;}
+  </style>
+</head>
+<body>
+<div id="root" style="max-width:480px;margin:0 auto;min-height:100vh;"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script>
+const app = firebase.initializeApp(FIREBASE_CONFIG);
+const db  = firebase.database();
+const F   = "'Barlow Condensed', sans-serif";
+const $   = id => document.getElementById(id);
+
+const params    = new URLSearchParams(location.search);
+const tournoiId = params.get("t");
+
+if(!tournoiId){ renderErreur("Lien invalide. Scanne le QR code du tournoi."); }
+
+let tournoi = null;
+let myMatchId  = null; // match en cours de jeu
+let mySide     = null; // "home" | "away"
+
+// ── Flip Counter ──────────────────────────────────────
+const COL_HOME = "#e63946", COL_AWAY = "#1d6fa4";
+
+function flipHTML(value, color, size, id){
+  size=size||56; id=id||"";
+  var digits=String(Math.abs(Math.round(value))).padStart(2,"0").split("");
+  var fs=Math.round(size*.66), w=Math.round(size*.76);
+  return '<div style="display:inline-flex;gap:3px;">'+
+    digits.map(function(d,i){
+      var eid=id?'id="fd-'+id+'-'+i+'"':'';
+      return '<div '+eid+' data-val="'+d+'" style="position:relative;width:'+w+'px;height:'+size+'px;font-size:'+fs+'px;font-family:'+F+';font-weight:900;">'+
+        '<div class="fd-top" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;background:#222;border-radius:7px 7px 0 0;display:flex;align-items:flex-end;justify-content:center;border-bottom:1.5px solid #111;"><span style="color:'+color+';transform:translateY(50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-bot" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;background:#1a1a1a;border-radius:0 0 7px 7px;display:flex;align-items:flex-start;justify-content:center;"><span style="color:'+color+';transform:translateY(-50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-fold" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;background:#222;border-radius:7px 7px 0 0;display:flex;align-items:flex-end;justify-content:center;transform-origin:bottom center;z-index:2;"><span style="color:'+color+';transform:translateY(50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-unfold" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;background:#1a1a1a;border-radius:0 0 7px 7px;display:flex;align-items:flex-start;justify-content:center;transform-origin:top center;z-index:2;transform:rotateX(90deg);"><span style="color:'+color+';transform:translateY(-50%);display:block;line-height:1;">'+d+'</span></div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+
+function flipDigitTo(el,newVal){
+  if(!el)return; var cur=el.dataset.val; if(cur===String(newVal))return;
+  var fold=el.querySelector(".fd-fold"),unfold=el.querySelector(".fd-unfold");
+  fold.querySelector("span").textContent=cur;
+  unfold.querySelector("span").textContent=newVal;
+  el.dataset.val=String(newVal);
+  fold.style.animation=unfold.style.animation="none";
+  void fold.offsetWidth;
+  fold.style.animation="flip-top .2s ease-in forwards";
+  unfold.style.animation="flip-bot .2s ease-out .18s forwards";
+  setTimeout(function(){
+    el.querySelector(".fd-top span").textContent=newVal;
+    el.querySelector(".fd-bot span").textContent=newVal;
+    fold.style.animation=unfold.style.animation="none";
+    fold.querySelector("span").textContent=newVal;
+  },450);
+}
+function flipTo(id,val){
+  String(Math.abs(Math.round(val))).padStart(2,"0").split("").forEach(function(d,i){
+    flipDigitTo(document.getElementById("fd-"+id+"-"+i),d);
+  });
+}
+
+function calcManche(eHome, eAway){
+  var rawH=eHome.hole*3+eHome.board, rawA=eAway.hole*3+eAway.board, d=rawH-rawA;
+  return {ptsHome:Math.max(0,d), ptsAway:Math.max(0,-d), rawH:rawH, rawA:rawA};
+}
+
+// ── Erreur ─────────────────────────────────────────────
+function renderErreur(msg){
+  $("root").innerHTML='<div style="padding:40px 20px;text-align:center;"><div style="font-size:36px;margin-bottom:12px;">⚠️</div><div style="font-size:18px;color:#e63946;font-weight:700;">'+msg+'</div></div>';
+}
+
+// ── Chargement initial ──────────────────────────────────
+if(tournoiId){
+  db.ref("tournois/"+tournoiId).on("value", function(snap){
+    if(!snap.exists()){renderErreur("Tournoi introuvable.");return;}
+    tournoi=snap.val();
+    if(myMatchId) renderScore(); else renderListe();
+  });
+}
+
+// ── LISTE DES MATCHS ──────────────────────────────────
+function renderListe(){
+  var t=tournoi;
+  var matchs=Object.entries(t.matchs||{});
+  var eqMap=Object.fromEntries(Object.entries(t.equipes||{}));
+
+  // Trier par terrain puis statut (en_cours > prevu > termine)
+  var ordre={"en_cours":0,"prevu":1,"termine":2};
+  matchs.sort(function(a,b){
+    var sa=ordre[a[1].statut]||0, sb=ordre[b[1].statut]||0;
+    if(sa!==sb)return sa-sb;
+    return (a[1].terrain||0)-(b[1].terrain||0);
+  });
+
+  var html=
+    '<div style="padding:16px 16px 0;">'+
+      '<div style="font-size:10px;letter-spacing:3px;color:#555;">CORNHOLE</div>'+
+      '<div style="font-size:26px;font-weight:900;margin-bottom:2px;">'+t.nom+'</div>'+
+      '<div style="font-size:12px;color:#555;margin-bottom:18px;">'+t.ppt+'v'+t.ppt+' · Score cible: '+t.winScore+'pts'+(t.maxRounds?" · "+t.maxRounds+" manches":"")+'</div>'+
+    '</div>'+
+    '<div style="padding:0 16px;">';
+
+  if(matchs.length===0){
+    html+='<div style="text-align:center;color:#333;padding:40px 0;font-size:16px;">Aucun match créé par l\'admin.</div>';
+  }
+
+  var currentTerrain=null;
+  matchs.forEach(function(entry){
+    var id=entry[0], m=entry[1];
+    var home=eqMap[m.homeId]||{nom:"?",photo:null};
+    var away=eqMap[m.awayId]||{nom:"?",photo:null};
+    var isEnCours=m.statut==="en_cours";
+    var isTermine=m.statut==="termine";
+
+    // Header terrain
+    if(m.terrain!==currentTerrain){
+      if(currentTerrain!==null) html+='</div>';
+      html+='<div style="font-size:10px;letter-spacing:2px;color:#555;margin:'+(currentTerrain!==null?"16px":0)+' 0 8px;">TERRAIN '+m.terrain+'</div>';
+      currentTerrain=m.terrain;
+    }
+
+    html+=
+      '<div style="background:#111;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid '+(isEnCours?"#f4a10055":isTermine?"#1a1a1a":"#1e1e1e")+';">'+
+        // Statut
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+          '<div style="font-size:10px;color:#444;letter-spacing:1px;">Terrain '+m.terrain+' · '+(m.winScore||21)+'pts'+(m.maxRounds?" · "+m.maxRounds+" manches":"")+'</div>'+
+          '<div style="font-size:11px;font-weight:700;color:'+(isEnCours?"#f4a100":isTermine?"#2e7d32":"#555")+'">'+(isEnCours?"⚡ EN COURS":isTermine?"✅ TERMINÉ":"⏳ PRÉVU")+'</div>'+
+        '</div>'+
+        // Équipes + score
+        '<div style="display:flex;align-items:center;gap:6px;">'+
+          // Home
+          '<div style="flex:1;display:flex;align-items:center;gap:8px;">'+
+            (home.photo?'<img src="'+home.photo+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;border:2px solid '+COL_HOME+'44;"/>':'<div style="width:36px;height:36px;border-radius:8px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">🏠</div>')+
+            '<div><div style="font-size:15px;font-weight:800;color:'+COL_HOME+';">'+home.nom+'</div>'+
+            (home.joueurs&&home.joueurs.filter(function(j){return j;}).length?'<div style="font-size:10px;color:#555;">'+home.joueurs.filter(function(j){return j;}).join(" · ")+'</div>':"")+'</div>'+
+          '</div>'+
+          // Score ou "vs"
+          '<div style="text-align:center;flex-shrink:0;padding:0 6px;">'+
+            (isEnCours||isTermine?
+              '<div style="font-size:32px;font-weight:900;line-height:1;"><span style="color:'+COL_HOME+';">'+(m.scoreHome||0)+'</span><span style="color:#2a2a2a;margin:0 4px;">–</span><span style="color:'+COL_AWAY+';">'+(m.scoreAway||0)+'</span></div>'+
+              '<div style="font-size:9px;color:#333;margin-top:2px;">R'+(m.round||1)+'</div>'
+              :'<div style="font-size:20px;color:#2a2a2a;font-weight:900;">vs</div>')+
+          '</div>'+
+          // Away
+          '<div style="flex:1;display:flex;align-items:center;gap:8px;justify-content:flex-end;">'+
+            '<div style="text-align:right;"><div style="font-size:15px;font-weight:800;color:'+COL_AWAY+';">'+away.nom+'</div>'+
+            (away.joueurs&&away.joueurs.filter(function(j){return j;}).length?'<div style="font-size:10px;color:#555;">'+away.joueurs.filter(function(j){return j;}).join(" · ")+'</div>':"")+'</div>'+
+            (away.photo?'<img src="'+away.photo+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;border:2px solid '+COL_AWAY+'44;"/>':'<div style="width:36px;height:36px;border-radius:8px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">🏃</div>')+
+          '</div>'+
+        '</div>'+
+        // Boutons PLAY (seulement si match prévu ou en cours)
+        (!isTermine?
+          '<div style="display:flex;gap:8px;margin-top:12px;">'+
+            '<button onclick="joinMatch(\''+id+'\',\'home\')" style="flex:1;padding:12px;border-radius:11px;background:'+COL_HOME+'22;border:2px solid '+COL_HOME+'44;color:'+COL_HOME+';font-size:14px;font-weight:900;cursor:pointer;letter-spacing:1px;">▶ PLAY<br/><span style="font-size:11px;opacity:.7;">'+home.nom+'</span></button>'+
+            '<button onclick="joinMatch(\''+id+'\',\'away\')" style="flex:1;padding:12px;border-radius:11px;background:'+COL_AWAY+'22;border:2px solid '+COL_AWAY+'44;color:'+COL_AWAY+';font-size:14px;font-weight:900;cursor:pointer;letter-spacing:1px;">▶ PLAY<br/><span style="font-size:11px;opacity:.7;">'+away.nom+'</span></button>'+
+          '</div>'
+          :"")+ // Terminé : pas de boutons play
+      '</div>';
+  });
+
+  html+='</div>';
+  $("root").innerHTML=html;
+}
+
+// ── REJOINDRE UN MATCH ──────────────────────────────────
+window.joinMatch = function(matchId, side){
+  myMatchId=matchId; mySide=side;
+  // Marquer prêt dans Firebase
+  var m=tournoi.matchs[matchId];
+  var update={};
+  update["ready_"+side]=true;
+  if(m.statut==="prevu") update["statut"]="en_cours";
+  db.ref("tournois/"+tournoiId+"/matchs/"+matchId).update(update);
+};
+
+// ── ÉCRAN DE SCORE ──────────────────────────────────────
+function renderScore(){
+  if(!myMatchId||!tournoi)return;
+  var m=tournoi.matchs[myMatchId];
+  if(!m){myMatchId=null;mySide=null;renderListe();return;}
+
+  var eqMap=Object.fromEntries(Object.entries(tournoi.equipes||{}));
+  var home=eqMap[m.homeId]||{nom:"HOME",photo:null};
+  var away=eqMap[m.awayId]||{nom:"AWAY",photo:null};
+  var myTeam=mySide==="home"?home:away;
+  var myColor=mySide==="home"?COL_HOME:COL_AWAY;
+  var myScore=mySide==="home"?(m.scoreHome||0):(m.scoreAway||0);
+  var theirScore=mySide==="home"?(m.scoreAway||0):(m.scoreHome||0);
+  var theirTeam=mySide==="home"?away:home;
+  var theirColor=mySide==="home"?COL_AWAY:COL_HOME;
+
+  var mc=m.manche_courante;
+  var isLast=m.maxRounds&&m.round===m.maxRounds;
+
+  // Déterminer phase
+  var mesSacs=mc&&mc["sacs_"+mySide];
+  var leursSacs=mc&&mc["sacs_"+(mySide==="home"?"away":"home")];
+  var maConf=mc&&mc["conf_"+mySide];
+
+  var phase;
+  if(m.statut==="termine") phase="gagne";
+  else if(!mc||!mesSacs||!mesSacs.soumis) phase="saisie";
+  else if(!leursSacs||!leursSacs.soumis) phase="attente";
+  else if(maConf===null||maConf===undefined) phase="confirmation";
+  else if(maConf===false) phase="conteste";
+  else phase="valide";
+
+  var html='<div style="min-height:100vh;display:flex;flex-direction:column;">';
+
+  // Header score
+  html+=
+    '<div style="background:linear-gradient(145deg,'+myColor+'cc,'+myColor+'88);padding:16px 16px 12px;">'+
+      '<div style="font-size:9px;letter-spacing:3px;color:rgba(255,255,255,.6);">CORNHOLE · MANCHE '+(m.round||1)+(m.maxRounds?" / "+m.maxRounds:"")+'</div>'+
+      (isLast?'<div class="last-round" style="font-size:13px;font-weight:900;color:#fff;margin-bottom:2px;">⚠️ DERNIÈRE MANCHE</div>':"")+
+      '<div style="font-size:22px;font-weight:900;margin:2px 0;">'+myTeam.nom+'</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-end;">'+
+        '<div>'+
+          '<div style="font-size:72px;font-weight:900;line-height:1;color:#fff;">'+myScore+'</div>'+
+          '<div style="font-size:11px;color:rgba(255,255,255,.5);">/ '+(m.winScore||21)+' pts</div>'+
+        '</div>'+
+        '<div style="text-align:right;">'+
+          '<div style="font-size:13px;color:rgba(255,255,255,.5);">'+theirTeam.nom+'</div>'+
+          '<div style="font-size:38px;font-weight:900;color:rgba(255,255,255,.7);">'+theirScore+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="background:rgba(0,0,0,.2);border-radius:6px;height:5px;margin-top:8px;">'+
+        '<div style="width:'+Math.min((myScore/(m.winScore||21))*100,100)+'%;background:#fff;border-radius:6px;height:5px;opacity:.8;transition:width .5s;"></div>'+
+      '</div>'+
+    '</div>';
+
+  // Corps selon phase
+  html+='<div style="flex:1;padding:16px;">';
+
+  if(phase==="saisie"){
+    var entry=mc&&mc["sacs_"+mySide]||{hole:0,board:0};
+
+    function bagRow(type, color){
+      return [1,2,3,4].map(function(n){
+        var sel=(entry[type]||0)===n;
+        return '<button onclick="setSac(\''+type+'\','+n+')" style="width:52px;height:52px;border-radius:50%;background:'+(sel?color:"#2a2a2a")+';border:2px solid '+(sel?color:"#3a3a3a")+';color:#fff;font-size:20px;font-weight:800;cursor:pointer;box-shadow:'+(sel?"0 4px 14px "+color+"66":"none")+';transform:'+(sel?"scale(1.1)":"scale(1)")+';transition:all .15s;">'+n+'</button>';
+      }).join("");
+    }
+
+    var raw=(entry.hole||0)*3+(entry.board||0);
+    html+=
+      '<div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:14px;">TES SACS — MANCHE '+(m.round||1)+'</div>'+
+      '<div style="margin-bottom:16px;">'+
+        '<div style="font-size:12px;color:#888;margin-bottom:8px;">Bags In Hole <span style="color:'+myColor+';font-weight:700;">(3 pts)</span></div>'+
+        '<div style="display:flex;gap:10px;">'+bagRow("hole",myColor)+'</div>'+
+      '</div>'+
+      '<div style="margin-bottom:16px;">'+
+        '<div style="font-size:12px;color:#888;margin-bottom:8px;">Bags On Board <span style="color:'+myColor+';font-weight:700;">(1 pt)</span></div>'+
+        '<div style="display:flex;gap:10px;">'+bagRow("board",myColor)+'</div>'+
+      '</div>'+
+      // Flip counter points bruts
+      '<div style="background:#111;border-radius:12px;padding:12px 16px;margin-bottom:16px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="font-size:11px;color:#444;letter-spacing:1px;">MES SACS (brut)</div>'+
+        '<div>'+flipHTML(raw,myColor,44,"raw-me")+'</div>'+
+      '</div>'+
+      '<button onclick="soumettreSacs()" style="width:100%;padding:16px;border-radius:13px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">✓ Soumettre mes sacs</button>'+
+      '<button onclick="retourListe()" style="width:100%;padding:11px;border-radius:11px;margin-top:8px;background:transparent;border:none;color:#444;font-size:14px;font-weight:700;cursor:pointer;">◀ Retour aux matchs</button>';
+
+  } else if(phase==="attente"){
+    var soumis=mc["sacs_"+mySide];
+    var pts=soumis?(soumis.hole||0)*3+(soumis.board||0):0;
+    html+=
+      '<div style="text-align:center;padding:20px 0;">'+
+        '<div style="font-size:52px;margin-bottom:12px;">⏳</div>'+
+        '<div style="font-size:22px;font-weight:900;margin-bottom:6px;">En attente de '+theirTeam.nom+'</div>'+
+        '<div style="font-size:14px;color:#555;margin-bottom:24px;">Ils saisissent leurs sacs...</div>'+
+        '<div style="background:#111;border-radius:12px;padding:14px;border:1px solid #1e1e1e;">'+
+          '<div style="font-size:11px;color:#555;margin-bottom:6px;">TES SACS SOUMIS</div>'+
+          '<div>'+flipHTML(pts,myColor,52,"raw-soumis")+'</div>'+
+          '<div style="font-size:12px;color:#555;margin-top:4px;">'+(soumis?(soumis.hole||0)+" trou · "+(soumis.board||0)+" plateau":"")+'</div>'+
+        '</div>'+
+      '</div>';
+
+  } else if(phase==="confirmation"){
+    var lSacs=mc["sacs_"+(mySide==="home"?"away":"home")];
+    var lRaw=lSacs?((lSacs.hole||0)*3+(lSacs.board||0)):0;
+    var mSacs=mc["sacs_"+mySide];
+    var mRaw=mSacs?((mSacs.hole||0)*3+(mSacs.board||0)):0;
+    var res=calcManche(
+      mySide==="home"?{hole:mSacs?mSacs.hole:0,board:mSacs?mSacs.board:0}:{hole:lSacs?lSacs.hole:0,board:lSacs?lSacs.board:0},
+      mySide==="home"?{hole:lSacs?lSacs.hole:0,board:lSacs?lSacs.board:0}:{hole:mSacs?mSacs.hole:0,board:mSacs?mSacs.board:0}
+    );
+    var moiPts=mySide==="home"?res.ptsHome:res.ptsAway;
+    var euxPts=mySide==="home"?res.ptsAway:res.ptsHome;
+    html+=
+      '<div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:14px;">CONFIRME LES SACS DE '+theirTeam.nom.toUpperCase()+'</div>'+
+      '<div style="background:#111;border-radius:14px;padding:16px;border:1px solid #2a2a2a;margin-bottom:14px;">'+
+        '<div style="display:flex;gap:16px;margin-bottom:12px;">'+
+          '<div style="flex:1;text-align:center;"><div style="font-size:11px;color:#555;margin-bottom:4px;">TROU (×3pts)</div><div style="font-size:44px;font-weight:900;">'+(lSacs?lSacs.hole:0)+'</div></div>'+
+          '<div style="width:1px;background:#222;"></div>'+
+          '<div style="flex:1;text-align:center;"><div style="font-size:11px;color:#555;margin-bottom:4px;">PLATEAU (×1pt)</div><div style="font-size:44px;font-weight:900;">'+(lSacs?lSacs.board:0)+'</div></div>'+
+        '</div>'+
+        '<div style="background:#0a0a0a;border-radius:10px;padding:10px;text-align:center;border:1px solid #1e1e1e;">'+
+          '<div style="font-size:11px;color:#555;margin-bottom:4px;">TOTAL BRUT '+theirTeam.nom.toUpperCase()+'</div>'+
+          '<div>'+flipHTML(lRaw,theirColor,44,"raw-eux")+'</div>'+
+        '</div>'+
+      '</div>'+
+      // Résultat cancellation
+      '<div style="background:#0d1a0d;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #1a2e1a;">'+
+        '<div style="font-size:10px;color:#2e7d32;letter-spacing:2px;margin-bottom:8px;font-weight:700;">ACL CANCELLATION</div>'+
+        '<div style="display:flex;justify-content:center;gap:20px;">'+
+          '<div style="text-align:center;"><div style="font-size:10px;color:'+myColor+';opacity:.7;margin-bottom:4px;">TOI</div>'+flipHTML(moiPts,myColor,48,"conf-moi")+'</div>'+
+          '<div style="font-size:18px;color:#2a2a2a;font-weight:900;align-self:center;">|</div>'+
+          '<div style="text-align:center;"><div style="font-size:10px;color:'+theirColor+';opacity:.7;margin-bottom:4px;">'+theirTeam.nom.slice(0,8).toUpperCase()+'</div>'+flipHTML(euxPts,theirColor,48,"conf-eux")+'</div>'+
+        '</div>'+
+        '<div style="text-align:center;font-size:10px;color:#333;margin-top:6px;">brut: '+mRaw+' – '+lRaw+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<button onclick="confirmer(false)" style="flex:1;padding:14px;border-radius:12px;background:#1a1a1a;border:2px solid #e63946;color:#e63946;font-size:16px;font-weight:900;cursor:pointer;">❌ Contester</button>'+
+        '<button onclick="confirmer(true)" style="flex:2;padding:14px;border-radius:12px;background:linear-gradient(135deg,#2e7d32,#4caf50);border:none;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">✅ Confirmer</button>'+
+      '</div>';
+
+  } else if(phase==="conteste"){
+    html+=
+      '<div style="text-align:center;padding:20px 0;">'+
+        '<div style="font-size:52px;margin-bottom:12px;">⚠️</div>'+
+        '<div style="font-size:22px;font-weight:900;color:#e63946;margin-bottom:8px;">Score contesté</div>'+
+        '<div style="font-size:14px;color:#555;margin-bottom:24px;">Appelez un arbitre ou ressaisissez.</div>'+
+        '<button onclick="ressaisir()" style="width:100%;padding:14px;border-radius:12px;background:#1a1a1a;border:1px solid #333;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">↩ Ressaisir mes sacs</button>'+
+      '</div>';
+
+  } else if(phase==="valide"){
+    var vSacs=mc&&mc["sacs_"+mySide];
+    var vPts=vSacs?(vSacs.hole||0)*3+(vSacs.board||0):0;
+    html+=
+      '<div style="text-align:center;padding:20px 0;">'+
+        '<div style="font-size:52px;margin-bottom:12px;">✅</div>'+
+        '<div style="font-size:22px;font-weight:900;color:#4caf50;margin-bottom:6px;">Manche validée !</div>'+
+        '<div style="font-size:14px;color:#555;margin-bottom:24px;">En attente de la prochaine manche...</div>'+
+        '<div style="background:#111;border-radius:12px;padding:14px;border:1px solid #1e1e1e;text-align:left;">'+
+          '<div style="font-size:11px;color:#555;margin-bottom:6px;">RÉSUMÉ MANCHE</div>'+
+          '<div style="display:flex;justify-content:space-between;"><span style="color:'+myColor+';">+'+vPts+' pts nets</span><span style="color:#333;">sacs soumis</span></div>'+
+        '</div>'+
+      '</div>';
+
+  } else if(phase==="gagne"){
+    var jaGagne=mySide==="home"?(m.scoreHome||0)>=(m.winScore||21):(m.scoreAway||0)>=(m.winScore||21);
+    html+=
+      '<div style="text-align:center;padding:20px 0;animation:winner-in .4s ease;">'+
+        '<div style="font-size:64px;margin-bottom:10px;'+(jaGagne?"animation:trophy-bounce 1.5s ease-in-out infinite;":"")+'display:inline-block;">'+(jaGagne?"🏆":"😤")+'</div>'+
+        '<div style="font-size:38px;font-weight:900;color:'+(jaGagne?myColor:"#555")+';margin-bottom:6px;">'+(jaGagne?"VICTOIRE !":"Défaite")+'</div>'+
+        '<div style="font-size:48px;font-weight:900;margin:12px 0;">'+
+          '<span style="color:'+COL_HOME+';">'+(m.scoreHome||0)+'</span>'+
+          '<span style="color:#2a2a2a;margin:0 8px;">–</span>'+
+          '<span style="color:'+COL_AWAY+';">'+(m.scoreAway||0)+'</span>'+
+        '</div>'+
+        '<div style="font-size:14px;color:#555;margin-bottom:24px;">'+home.nom+' vs '+away.nom+'</div>'+
+        '<button onclick="retourListe()" style="width:100%;padding:14px;border-radius:12px;background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:10px;">◀ Retour aux matchs</button>'+
+        '<a href="cornhole-classement.html?t='+tournoiId+'" style="display:block;width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f4a100,#f77f00);color:#000;font-size:16px;font-weight:900;text-decoration:none;text-align:center;">🏆 Voir le Classement</a>'+
+      '</div>';
+  }
+
+  html+='</div></div>';
+  $("root").innerHTML=html;
+}
+
+// ── Entrée sacs locale (avant soumission) ───────────────
+var localEntry={hole:0,board:0};
+
+window.setSac=function(type,val){
+  localEntry[type]=localEntry[type]===val?0:val;
+  // Re-render la section saisie sans toucher au header
+  renderScore();
+  var raw=(localEntry.hole||0)*3+(localEntry.board||0);
+  setTimeout(function(){flipTo("raw-me",raw);},20);
+};
+
+window.soumettreSacs=function(){
+  if(!myMatchId)return;
+  var sacKey="sacs_"+mySide;
+  var updates={};
+  updates["manche_courante/"+sacKey]={hole:localEntry.hole,board:localEntry.board,soumis:true};
+  // Initialiser conf si nécessaire
+  var m=tournoi.matchs[myMatchId];
+  if(!m.manche_courante){
+    updates["manche_courante/conf_home"]=null;
+    updates["manche_courante/conf_away"]=null;
+  }
+  db.ref("tournois/"+tournoiId+"/matchs/"+myMatchId).update(updates);
+  localEntry={hole:0,board:0};
+};
+
+window.confirmer=function(ok){
+  if(!myMatchId)return;
+  var confKey="manche_courante/conf_"+mySide;
+  var update={}; update[confKey]=ok;
+  db.ref("tournois/"+tournoiId+"/matchs/"+myMatchId).update(update);
+  if(ok) checkValiderManche();
+};
+
+function checkValiderManche(){
+  var m=tournoi.matchs[myMatchId];
+  if(!m||!m.manche_courante)return;
+  var mc=m.manche_courante;
+  var confH=mc.conf_home, confA=mc.conf_away;
+  if(confH!==true||confA!==true)return;
+  validerManche(m,mc);
+}
+
+function validerManche(m,mc){
+  var sH=mc.sacs_home||{hole:0,board:0}, sA=mc.sacs_away||{hole:0,board:0};
+  var res=calcManche(sH,sA);
+  var nH=(m.scoreHome||0)+res.ptsHome, nA=(m.scoreAway||0)+res.ptsAway;
+  var nR=(m.round||1)+1;
+  var win=m.winScore||21;
+  var statut="en_cours";
+  if(nH>=win||nA>=win) statut="termine";
+  if(m.maxRounds&&nR>m.maxRounds) statut="termine";
+  db.ref("tournois/"+tournoiId+"/matchs/"+myMatchId).update({
+    scoreHome:nH, scoreAway:nA, round:nR, statut:statut, manche_courante:null
+  });
+}
+
+window.ressaisir=function(){
+  if(!myMatchId)return;
+  var sacKey="manche_courante/sacs_"+mySide;
+  var confKey="manche_courante/conf_"+mySide;
+  var u={}; u[sacKey]=null; u[confKey]=null;
+  db.ref("tournois/"+tournoiId+"/matchs/"+myMatchId).update(u);
+  localEntry={hole:0,board:0};
+};
+
+window.retourListe=function(){
+  myMatchId=null; mySide=null; localEntry={hole:0,board:0};
+  renderListe();
+};
+
+// ── Détecter si deux confirmations ──────────────────────
+// Écouter les changements Firebase pour valider la manche automatiquement
+db.ref&&db.ref("tournois/"+tournoiId+"/matchs").on&&db.ref("tournois/"+tournoiId+"/matchs").on("child_changed",function(snap){
+  if(!myMatchId||snap.key!==myMatchId)return;
+  var m=snap.val();
+  if(!m||!m.manche_courante)return;
+  var mc=m.manche_courante;
+  if(mc.conf_home===true&&mc.conf_away===true&&m.statut!=="termine"){
+    validerManche(m,mc);
+  }
+});
+</script>
+</body>
+</html>

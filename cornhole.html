@@ -3,60 +3,35 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
   <title>Cornhole Scorekeeper</title>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
-  <script src="firebase-config.js?v=3"></script>
+  <script src="firebase-config.js?v=4"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     body{background:#0a0a0a;color:#fff;font-family:'Barlow Condensed',sans-serif;min-height:100vh;overscroll-behavior:none;}
     input,button,select{outline:none;font-family:'Barlow Condensed',sans-serif;}
-    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
-    input[type=number]{-moz-appearance:textfield;}
+    @keyframes winner-in{from{transform:translateY(60px) scale(.9);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
+    @keyframes trophy-bounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-14px)}70%{transform:translateY(-8px)}}
+    @keyframes last-round-pulse{0%,100%{opacity:1}50%{opacity:.6}}
+    @keyframes flip-top{0%{transform:rotateX(0deg)}100%{transform:rotateX(-90deg)}}
+    @keyframes flip-bot{0%{transform:rotateX(90deg)}100%{transform:rotateX(0deg)}}
     @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-    @keyframes score-pop{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
-    @keyframes winner-flash{0%,100%{opacity:1}50%{opacity:.7}}
-    @keyframes tb{0%,100%{transform:translateY(0) rotate(0deg)}30%{transform:translateY(-14px) rotate(-6deg)}70%{transform:translateY(-9px) rotate(6deg)}}
-    @keyframes wi{from{transform:translateY(70px) scale(.8);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
-    @keyframes tsh{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px) rotate(-2deg)}40%{transform:translateX(9px) rotate(2deg)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
-    @keyframes gp{0%,100%{box-shadow:0 0 30px var(--wc,#f4a100)44}50%{box-shadow:0 0 70px var(--wc,#f4a100)88}}
-    @keyframes slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes flip-top{0%{transform:rotateX(0)}100%{transform:rotateX(-90deg)}}
-    @keyframes flip-bot{0%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
-    .score-pop{animation:score-pop .45s cubic-bezier(.34,1.56,.64,1)}
-    .slide-up{animation:slide-up .3s ease forwards}
-    /* ── Flip Counter ── */
-    .flip-wrap{display:inline-flex;gap:3px;perspective:400px;}
-    .flip-digit{position:relative;width:48px;height:64px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:42px;}
-    .flip-digit .fd-top,.flip-digit .fd-bot{position:absolute;left:0;right:0;height:50%;overflow:hidden;background:#1e1e1e;}
-    .flip-digit .fd-top{top:0;border-radius:8px 8px 0 0;display:flex;align-items:flex-end;justify-content:center;border-bottom:1.5px solid #000;}
-    .flip-digit .fd-bot{bottom:0;border-radius:0 0 8px 8px;display:flex;align-items:flex-start;justify-content:center;}
-    .flip-digit .fd-top span{transform:translateY(50%);display:block;line-height:1;}
-    .flip-digit .fd-bot span{transform:translateY(-50%);display:block;line-height:1;}
-    .flip-digit .fd-fold{position:absolute;top:0;left:0;right:0;height:50%;border-radius:8px 8px 0 0;overflow:hidden;transform-origin:bottom;background:#222;display:flex;align-items:flex-end;justify-content:center;z-index:2;backface-visibility:hidden;}
-    .flip-digit .fd-fold span{transform:translateY(50%);display:block;line-height:1;}
-    .flip-digit .fd-unfold{position:absolute;bottom:0;left:0;right:0;height:50%;border-radius:0 0 8px 8px;overflow:hidden;transform-origin:top;background:#1e1e1e;display:flex;align-items:flex-start;justify-content:center;z-index:2;transform:rotateX(90deg);backface-visibility:hidden;}
-    .flip-digit .fd-unfold span{transform:translateY(-50%);display:block;line-height:1;}
-    .flip-digit.flipping .fd-fold{animation:flip-top .18s ease-in forwards;}
-    .flip-digit.flipping .fd-unfold{animation:flip-bot .18s ease-out .18s forwards;}
   </style>
 </head>
 <body>
 <div id="root" style="max-width:520px;margin:0 auto;padding-bottom:40px;"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-const app = initializeApp(FIREBASE_CONFIG);
-const db  = getDatabase(app);
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script>
+// Init Firebase compat
+const app = firebase.initializeApp(FIREBASE_CONFIG);
+const db  = firebase.database();
 const F   = "'Barlow Condensed', sans-serif";
 const $   = id => document.getElementById(id);
 const uid = () => Math.random().toString(36).slice(2,9);
 const baseUrl = () => window.location.href.replace(/[^/]*$/, "");
 
-// ── Couleurs ──
 const COLORS = [
   {bg:"linear-gradient(145deg,#7f0000,#e63946)",s:"#e63946"},
   {bg:"linear-gradient(145deg,#0d47a1,#1d6fa4)",s:"#1d6fa4"},
@@ -64,892 +39,707 @@ const COLORS = [
   {bg:"linear-gradient(145deg,#4a148c,#7b1fa2)",s:"#7b1fa2"},
   {bg:"linear-gradient(145deg,#e65100,#f77f00)",s:"#f77f00"},
   {bg:"linear-gradient(145deg,#006064,#00838f)",s:"#00838f"},
-  {bg:"linear-gradient(145deg,#880e4f,#e91e63)",s:"#e91e63"},
-  {bg:"linear-gradient(145deg,#827717,#f9a825)",s:"#f9a825"},
 ];
 const GHOST = [{label:"Easy",min:0,max:3},{label:"Medium",min:2,max:6},{label:"Hard",min:4,max:9},{label:"Pro",min:6,max:12}];
 
-// ── State local (partie simple) ──
-let matchsSimple = JSON.parse(localStorage.getItem("cornhole_simple")||"[]");
-let sacsEnCours  = {};
-const saveSimple = () => localStorage.setItem("cornhole_simple", JSON.stringify(matchsSimple));
-
-// ── State tournoi Firebase ──
 let tournoi = null;
-let tournoiId = localStorage.getItem("cornhole_admin_id")||null;
-
-// ── Scorekeeper standalone state ──
+let tournoiId = localStorage.getItem("cornhole_admin_id") || null;
 let sk = {
-  cfg: {
+  cfg:{
     teamA:{name:"Red Team",colorIdx:0,players:["",""],photo:null},
     teamB:{name:"Blue Team",colorIdx:1,players:["",""],photo:null},
     playersPerTeam:1, gameMode:"standard",
     winScore:21, useWinScore:true,
-    maxRounds:10, useMaxRounds:false,
-    cancellation:false, ghostMode:false, ghostDiff:1,
-    tournamentName:"", sponsors:[],
+    maxRounds:null, useMaxRounds:false,
+    ghostMode:false, ghostDiff:1, tournamentName:"",
   },
-  game: {scores:{a:0,b:0}, round:1, history:[], winner:null, entry:{a:{hole:0,board:0},b:{hole:0,board:0}}},
-  screen: "setup",
-  showScore: false, showStats: false,
-  allGames: [],
+  game:{scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}},
+  showScore:false, showStats:false,
 };
 window.sk = sk;
-const GHOST_PRESET = () => GHOST[sk.cfg.ghostDiff];
 
-// ════════════════════════════════════════
-// FLIP COUNTER — moteur split-flap sans re-render
-// ════════════════════════════════════════
-
-// Génère le HTML d'un flip counter (appelé une seule fois par render)
-function flipHTML(value, color, size=64, id="") {
-  const digits = String(Math.abs(Math.round(value))).padStart(2,"0").split("");
-  const fs = Math.round(size * 0.66);
-  const w  = Math.round(size * 0.76);
-  return `<div class="flip-wrap" style="display:inline-flex;gap:3px;perspective:600px;">
-    ${digits.map((d,i) => `
-      <div class="flip-digit" id="${id?`fd-${id}-${i}`:""}" data-val="${d}"
-           style="position:relative;width:${w}px;height:${size}px;font-size:${fs}px;font-family:'Barlow Condensed',sans-serif;font-weight:900;">
-        <div class="fd-top" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;
-             background:#222;border-radius:8px 8px 0 0;
-             display:flex;align-items:flex-end;justify-content:center;
-             border-bottom:1.5px solid #111;">
-          <span style="color:${color};transform:translateY(50%);display:block;line-height:1;">${d}</span>
-        </div>
-        <div class="fd-bot" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;
-             background:#1a1a1a;border-radius:0 0 8px 8px;
-             display:flex;align-items:flex-start;justify-content:center;">
-          <span style="color:${color};transform:translateY(-50%);display:block;line-height:1;">${d}</span>
-        </div>
-        <div class="fd-fold" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;
-             background:#222;border-radius:8px 8px 0 0;
-             display:flex;align-items:flex-end;justify-content:center;
-             transform-origin:bottom center;z-index:2;backface-visibility:hidden;
-             box-shadow:0 2px 6px rgba(0,0,0,.4);">
-          <span style="color:${color};transform:translateY(50%);display:block;line-height:1;">${d}</span>
-        </div>
-        <div class="fd-unfold" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;
-             background:#1a1a1a;border-radius:0 0 8px 8px;
-             display:flex;align-items:flex-start;justify-content:center;
-             transform-origin:top center;z-index:2;transform:rotateX(90deg);backface-visibility:hidden;">
-          <span style="color:${color};transform:translateY(-50%);display:block;line-height:1;">${d}</span>
-        </div>
-      </div>`).join("")}
-  </div>`;
+// ACL Cancellation scoring — règle par défaut
+function calcManche(eA, eB) {
+  const rawA=eA.hole*3+eA.board, rawB=eB.hole*3+eB.board;
+  const d=rawA-rawB;
+  return {ptsA:Math.max(0,d), ptsB:Math.max(0,-d), rawA, rawB};
 }
 
-// Anime un seul digit vers une nouvelle valeur (sans recréer le DOM)
+// === FLIP COUNTER ===
+function flipHTML(value, color, size, id) {
+  size = size||60; id = id||"";
+  var digits = String(Math.abs(Math.round(value))).padStart(2,"0").split("");
+  var fs=Math.round(size*.66), w=Math.round(size*.76);
+  return '<div style="display:inline-flex;gap:3px;">'+
+    digits.map(function(d,i){
+      var eid = id ? 'id="fd-'+id+'-'+i+'"' : '';
+      return '<div '+eid+' data-val="'+d+'" style="position:relative;width:'+w+'px;height:'+size+'px;font-size:'+fs+'px;font-family:'+F+';font-weight:900;">'+
+        '<div class="fd-top" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;background:#252525;border-radius:8px 8px 0 0;display:flex;align-items:flex-end;justify-content:center;border-bottom:1.5px solid #111;"><span style="color:'+color+';transform:translateY(50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-bot" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;background:#1e1e1e;border-radius:0 0 8px 8px;display:flex;align-items:flex-start;justify-content:center;"><span style="color:'+color+';transform:translateY(-50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-fold" style="position:absolute;top:0;left:0;right:0;height:50%;overflow:hidden;background:#252525;border-radius:8px 8px 0 0;display:flex;align-items:flex-end;justify-content:center;transform-origin:bottom center;z-index:2;backface-visibility:hidden;"><span style="color:'+color+';transform:translateY(50%);display:block;line-height:1;">'+d+'</span></div>'+
+        '<div class="fd-unfold" style="position:absolute;bottom:0;left:0;right:0;height:50%;overflow:hidden;background:#1e1e1e;border-radius:0 0 8px 8px;display:flex;align-items:flex-start;justify-content:center;transform-origin:top center;z-index:2;transform:rotateX(90deg);backface-visibility:hidden;"><span style="color:'+color+';transform:translateY(-50%);display:block;line-height:1;">'+d+'</span></div>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+
 function flipDigitTo(el, newVal) {
-  if (!el) return;
-  const cur = el.dataset.val;
-  if (cur === String(newVal)) return;
-  const fold   = el.querySelector(".fd-fold span");
-  const unfold = el.querySelector(".fd-unfold span");
-  const top    = el.querySelector(".fd-top span");
-  const bot    = el.querySelector(".fd-bot span");
-  const foldEl   = el.querySelector(".fd-fold");
-  const unfoldEl = el.querySelector(".fd-unfold");
-
-  // Préparer : fold affiche l'ancienne valeur, unfold affiche la nouvelle
-  fold.textContent   = cur;
-  unfold.textContent = newVal;
-  el.dataset.val = String(newVal);
-
-  // Reset animations
-  foldEl.style.animation   = "none";
-  unfoldEl.style.animation = "none";
-  void foldEl.offsetWidth; // reflow
-
-  // Lancer
-  foldEl.style.animation   = "flip-top .2s ease-in forwards";
-  unfoldEl.style.animation = "flip-bot .2s ease-out .2s forwards";
-
-  // Mettre à jour top/bot (valeurs statiques) après l'anim
-  setTimeout(() => {
-    top.textContent = newVal;
-    bot.textContent = newVal;
-    foldEl.style.animation   = "none";
-    unfoldEl.style.animation = "none";
-    // Remettre fold sur la nouvelle valeur pour le prochain flip
-    fold.textContent = newVal;
-  }, 450);
+  if(!el) return;
+  var cur=el.dataset.val; if(cur===String(newVal)) return;
+  var fold=el.querySelector(".fd-fold"), unfold=el.querySelector(".fd-unfold");
+  fold.querySelector("span").textContent=cur;
+  unfold.querySelector("span").textContent=newVal;
+  el.dataset.val=String(newVal);
+  fold.style.animation=unfold.style.animation="none";
+  void fold.offsetWidth;
+  fold.style.animation="flip-top .2s ease-in forwards";
+  unfold.style.animation="flip-bot .2s ease-out .18s forwards";
+  setTimeout(function(){
+    el.querySelector(".fd-top span").textContent=newVal;
+    el.querySelector(".fd-bot span").textContent=newVal;
+    fold.style.animation=unfold.style.animation="none";
+    fold.querySelector("span").textContent=newVal;
+  },450);
 }
 
-// Anime un compteur complet (2 digits) par son id
-function flipTo(id, newValue) {
-  const digits = String(Math.abs(Math.round(newValue))).padStart(2,"0").split("");
-  digits.forEach((d, i) => {
-    const el = document.getElementById(`fd-${id}-${i}`);
-    if (el) flipDigitTo(el, d);
+function flipTo(id, val) {
+  String(Math.abs(Math.round(val))).padStart(2,"0").split("").forEach(function(d,i){
+    flipDigitTo(document.getElementById("fd-"+id+"-"+i), d);
   });
 }
 
-// Wrapper avec fond coloré et label
-function flipScoreHTML(value, color, label, id, size=56) {
-  return `
-    <div style="background:${color}18;border-radius:14px;padding:14px 12px;border:1px solid ${color}33;text-align:center;flex-shrink:0;">
-      <div style="margin-bottom:5px;">${flipHTML(value, color, size, id)}</div>
-      <div style="font-size:10px;color:${color};opacity:.6;letter-spacing:2px;">${label}</div>
-    </div>`;
-}
-
-function calcPts(entry, cancel) {
-  const ra=entry.a.hole*3+entry.a.board, rb=entry.b.hole*3+entry.b.board;
-  if(cancel){const d=ra-rb;return{a:Math.max(0,d),b:Math.max(0,-d)};}
-  return{a:ra,b:rb};
-}
-
-// ════════════════════════════════════════
-// ÉCRAN D'ACCUEIL
-// ════════════════════════════════════════
+// === ACCUEIL ===
 function renderHome() {
-  $("root").innerHTML = `
-    <div style="padding:24px 18px 0;">
-      <div style="font-size:10px;letter-spacing:3px;color:#555;">CORNHOLE</div>
-      <div style="font-size:30px;font-weight:900;letter-spacing:1px;margin-bottom:24px;">SCOREKEEPER</div>
-    </div>
-    <div style="padding:0 18px;">
-
-      <!-- Partie Simple -->
-      <div onclick="goSimple()" style="background:#111;border-radius:18px;padding:20px;margin-bottom:12px;border:1px solid #1e1e1e;cursor:pointer;" onmouseover="this.style.borderColor='#f4a100'" onmouseout="this.style.borderColor='#1e1e1e'">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <div style="font-size:38px;filter:drop-shadow(0 2px 8px rgba(244,161,0,.3));">🎯</div>
-          <div>
-            <div style="font-size:21px;font-weight:900;color:#fff;">Partie Simple</div>
-            <div style="font-size:12px;color:#555;margin-top:3px;line-height:1.4;">Score local · Sans internet · Arbitre saisit les scores · Animations flip</div>
-          </div>
-          <div style="margin-left:auto;color:#444;font-size:22px;">▶</div>
-        </div>
-      </div>
-
-      <!-- Scorekeeper Autonome -->
-      <div onclick="goScorekeeper()" style="background:#111;border-radius:18px;padding:20px;margin-bottom:12px;border:1px solid #1e1e1e;cursor:pointer;" onmouseover="this.style.borderColor='#e63946'" onmouseout="this.style.borderColor='#1e1e1e'">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <div style="font-size:38px;">📱</div>
-          <div>
-            <div style="font-size:21px;font-weight:900;color:#fff;">Scorekeeper Complet</div>
-            <div style="font-size:12px;color:#555;margin-top:3px;line-height:1.4;">Photos · Sponsors · Ghost mode · Tournoi bracket · Stats · Sans Firebase</div>
-          </div>
-          <div style="margin-left:auto;color:#444;font-size:22px;">▶</div>
-        </div>
-      </div>
-
-      <!-- Tournoi Firebase -->
-      <div onclick="goTournoi()" style="background:#111;border-radius:18px;padding:20px;border:1px solid #1e1e1e;cursor:pointer;" onmouseover="this.style.borderColor='#1d6fa4'" onmouseout="this.style.borderColor='#1e1e1e'">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <div style="font-size:38px;">🏆</div>
-          <div>
-            <div style="font-size:21px;font-weight:900;color:#fff;">Tournoi Live</div>
-            <div style="font-size:12px;color:#555;margin-top:3px;line-height:1.4;">Firebase · QR codes · Équipes autonomes · Scoreboard & Classement TV</div>
-          </div>
-          <div style="margin-left:auto;color:#444;font-size:22px;">▶</div>
-        </div>
-      </div>
-
-      ${tournoiId?`<div style="margin-top:12px;background:#0d0d0d;border-radius:11px;padding:11px 14px;border:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;color:#555;">Tournoi en cours détecté</div>
-        <button onclick="reprendre()" style="padding:6px 14px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#f4a100;font-size:13px;font-weight:700;cursor:pointer;">Reprendre</button>
-      </div>`:""}
-    </div>`;
+  $("root").innerHTML =
+    '<div style="padding:28px 18px 0;">'+
+      '<div style="font-size:10px;letter-spacing:3px;color:#555;">CORNHOLE</div>'+
+      '<div style="font-size:32px;font-weight:900;margin-bottom:28px;">SCOREKEEPER</div>'+
+    '</div>'+
+    '<div style="padding:0 18px;">'+
+      card("goSK()", "📱", "Scorekeeper", "Match local · Sans Firebase · 1v1 ou 2v2 · Stats · Ghost", "#f4a100")+
+      card("goTournoi()", "🏆", "Tournoi Live", "Firebase · Inscriptions · Multi-terrains · QR unique · TV", "#1d6fa4")+
+      (tournoiId ?
+        '<div style="margin-top:12px;background:#0d0d0d;border-radius:11px;padding:11px 14px;border:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center;">'+
+          '<div style="font-size:12px;color:#555;">Tournoi en cours</div>'+
+          '<button onclick="reprendreTournoi()" style="padding:6px 14px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#f4a100;font-size:13px;font-weight:700;cursor:pointer;">Reprendre</button>'+
+        '</div>' : "")+
+    '</div>';
 }
 
-window.goSimple      = () => renderSimple();
-window.goScorekeeper = () => renderSKSetup();
-window.goTournoi     = () => renderSetupTournoi();
-window.reprendre     = () => loadTournoi();
+function card(fn, icon, title, desc, hoverColor) {
+  return '<div onclick="'+fn+'" style="background:#111;border-radius:18px;padding:22px;margin-bottom:12px;border:1px solid #1e1e1e;cursor:pointer;" '+
+    'onmouseover="this.style.borderColor=\''+hoverColor+'\'" onmouseout="this.style.borderColor=\'#1e1e1e\'">'+
+    '<div style="display:flex;align-items:center;gap:14px;">'+
+      '<div style="font-size:40px;">'+icon+'</div>'+
+      '<div><div style="font-size:22px;font-weight:900;">'+title+'</div>'+
+      '<div style="font-size:12px;color:#555;margin-top:3px;">'+desc+'</div></div>'+
+      '<div style="margin-left:auto;color:#333;font-size:22px;">▶</div>'+
+    '</div></div>';
+}
 
 function backBtn(fn) {
-  return `<button onclick="${fn}()" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:6px 12px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;">◀ Menu</button>`;
+  return '<button onclick="'+fn+'()" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:6px 12px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;">◀ Menu</button>';
 }
 
-// ════════════════════════════════════════
-// PARTIE SIMPLE — 100% LOCAL
-// ════════════════════════════════════════
-function renderSimple() {
-  $("root").innerHTML = `
-    <div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-      ${backBtn("renderHome")}
-      <div><div style="font-size:10px;letter-spacing:3px;color:#555;">MODE</div><div style="font-size:22px;font-weight:900;">PARTIE SIMPLE</div></div>
-    </div>
-    <div style="padding:0 18px;">
-      <!-- Nouveau match -->
-      <div style="background:#111;border-radius:14px;padding:16px;border:1px solid #1e1e1e;margin-bottom:16px;">
-        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU MATCH</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <input id="sNomA" placeholder="Équipe A" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:15px;font-weight:700;"/>
-          <input id="sNomB" placeholder="Équipe B" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:15px;font-weight:700;"/>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <select id="sTerrain" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:13px;">
-            <option value="">Terrain (optionnel)</option>
-            ${[1,2,3,4,5,6,7,8].map(n=>`<option>Terrain ${n}</option>`).join("")}
-          </select>
-          <select id="sWin" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:13px;">
-            <option value="21">21 pts</option><option value="15">15 pts</option><option value="11">11 pts</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;cursor:pointer;" onclick="document.getElementById('sCancel').checked=!document.getElementById('sCancel').checked">
-          <input type="checkbox" id="sCancel" style="width:16px;height:16px;accent-color:#f4a100;cursor:pointer;"/>
-          <div>
-            <div style="font-size:13px;font-weight:700;">Cancellation Scoring <span style="font-size:11px;color:#f4a100;">(ACL officiel)</span></div>
-            <div style="font-size:11px;color:#555;">Seule la différence des points compte par manche</div>
-          </div>
-        </div>
-        <button onclick="ajouterMatchSimple()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:16px;font-weight:900;cursor:pointer;letter-spacing:1px;">+ Créer le Match</button>
-      </div>
-      <div id="liste-simple"></div>
-    </div>`;
-  renderListeSimple();
+function toggle(on, fn) {
+  return '<div onclick="'+fn+'()" style="width:44px;height:24px;border-radius:12px;background:'+(on?"#f4a100":"#333")+';position:relative;cursor:pointer;flex-shrink:0;">'+
+    '<div style="position:absolute;top:3px;left:'+(on?22:2)+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div>'+
+  '</div>';
 }
 
-function renderListeSimple() {
-  const el = $("liste-simple"); if(!el) return;
-  const enCours  = matchsSimple.filter(m=>!m.termine);
-  const termines = matchsSimple.filter(m=> m.termine);
-  let html = "";
-  if(!enCours.length) html+=`<div style="text-align:center;color:#2a2a2a;padding:30px 0;font-size:14px;">Aucun match en cours</div>`;
-  enCours.forEach(m=>{ html+=renderCarteSimple(m); });
-  if(termines.length){
-    html+=`<div style="font-size:10px;letter-spacing:2px;color:#555;margin:14px 0 8px;">TERMINÉS (${termines.length})</div>`;
-    termines.forEach(m=>{ html+=renderCarteTermineeSimple(m); });
+window.goSK = function() { renderSKSetup(); };
+window.goTournoi = function() { renderSetupTournoi(); };
+window.reprendreTournoi = function() { loadTournoi(); };
+window.renderHome = renderHome;
+
+// === SCOREKEEPER SETUP ===
+function renderSKSetup() {
+  var c=sk.cfg, n=c.playersPerTeam;
+  var mxOpts=[4,6,8,10,12,14].filter(function(r){return r%n===0;});
+  var html='<div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:6px;">'+backBtn("renderHome")+
+    '<div><div style="font-size:10px;letter-spacing:3px;color:#555;">SCOREKEEPER</div><div style="font-size:22px;font-weight:900;">CONFIGURATION</div></div></div>'+
+    '<div style="padding:0 18px 24px;">';
+
+  // Nom événement
+  html+='<div style="font-size:10px;letter-spacing:2px;color:#555;margin:16px 0 7px;">NOM DE L\'ÉVÉNEMENT</div>'+
+    '<input value="'+c.tournamentName+'" oninput="sk.cfg.tournamentName=this.value" placeholder="Ex: Open Cornhole 2025" '+
+    'style="width:100%;background:#111;border:1px solid #2a2a2a;border-radius:11px;padding:12px 14px;color:#fff;font-size:17px;font-weight:700;"/>';
+
+  // Format
+  html+='<div style="font-size:10px;letter-spacing:2px;color:#555;margin:16px 0 7px;">FORMAT</div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:4px;">'+
+    [1,2].map(function(v){
+      var sel=n===v;
+      return '<button onclick="setSKPPT('+v+')" style="flex:1;padding:14px 0;border-radius:13px;background:'+(sel?"#fff":"#1a1a1a")+';border:'+(sel?"2px solid #fff":"2px solid #2a2a2a")+';color:'+(sel?"#000":"#888")+';font-size:22px;font-weight:900;cursor:pointer;line-height:1;">'+v+'v'+v+'<div style="font-size:11px;font-weight:600;margin-top:3px;opacity:.6;">'+(v===1?"Solo":"Duo")+'</div></button>';
+    }).join('')+'</div>';
+
+  // Équipes
+  html+='<div style="font-size:10px;letter-spacing:2px;color:#555;margin:16px 0 7px;">ÉQUIPES</div>';
+  ["teamA","teamB"].forEach(function(key,ki){
+    var eq=c[key], cl=COLORS[eq.colorIdx];
+    html+='<div style="background:#111;border-radius:13px;padding:13px;margin-bottom:9px;border:1px solid #1e1e1e;">'+
+      '<div style="font-size:11px;color:#555;margin-bottom:7px;">Équipe '+(ki===0?"A":"B")+'</div>'+
+      '<div style="display:flex;gap:9px;align-items:center;margin-bottom:9px;">'+
+        '<div style="position:relative;flex-shrink:0;">'+
+          '<div style="width:50px;height:50px;border-radius:10px;background:'+(eq.photo?"transparent":"#1a1a1a")+';border:2px dashed '+(eq.photo?cl.s:"#333")+';overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;">'+
+            (eq.photo?'<img src="'+eq.photo+'" style="width:100%;height:100%;object-fit:cover;"/>'  :'<span style="font-size:20px;">📷</span>')+
+          '</div>'+
+          '<input type="file" accept="image/*" onchange="setSKPhoto(\''+key+'\',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>'+
+          (eq.photo?'<div onclick="clearSKPhoto(\''+key+'\')" style="position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;background:#e63946;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:900;">✕</div>':"")  +
+        '</div>'+
+        '<input value="'+eq.name+'" oninput="sk.cfg.'+key+'.name=this.value" placeholder="Équipe '+(ki===0?"A":"B")+'" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:10px 11px;color:#fff;font-size:15px;font-weight:700;"/>'+
+      '</div>'+
+      (n===2?'<div style="display:flex;gap:7px;margin-bottom:9px;"><input value="'+(eq.players[0]||"")+'" oninput="sk.cfg.'+key+'.players[0]=this.value" placeholder="Joueur 1" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/><input value="'+(eq.players[1]||"")+'" oninput="sk.cfg.'+key+'.players[1]=this.value" placeholder="Joueur 2" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/></div>'
+       :n===1?'<div style="margin-bottom:9px;"><input value="'+(eq.players[0]||"")+'" oninput="sk.cfg.'+key+'.players[0]=this.value" placeholder="Nom du joueur" style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/></div>':"")  +
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;">'+
+        COLORS.map(function(cl2,ci){
+          return '<div onclick="setSKColor(\''+key+'\','+ci+')" style="width:26px;height:26px;border-radius:50%;background:'+cl2.s+';cursor:pointer;border:'+(eq.colorIdx===ci?"2px solid #fff":"2px solid transparent")+';box-shadow:'+(eq.colorIdx===ci?"0 0 8px "+cl2.s:"none")+'"></div>';
+        }).join('')+
+      '</div></div>';
+  });
+
+  // Règlement
+  html+='<div style="font-size:10px;letter-spacing:2px;color:#555;margin:16px 0 7px;">RÈGLEMENT</div>';
+
+  // Score cible
+  html+='<div style="background:#111;border-radius:12px;padding:13px;margin-bottom:9px;border:1px solid #1e1e1e;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(c.useWinScore?"10px":"0")+';">'+
+      '<div><div style="font-size:14px;font-weight:700;">Score cible</div><div style="font-size:11px;color:#555;margin-top:2px;">Premier à atteindre ce score</div></div>'+
+      toggle(c.useWinScore,"toggleSKWinScore")+
+    '</div>'+
+    (c.useWinScore?'<div style="display:flex;gap:7px;">'+ [11,15,21,25].map(function(w){var s=c.winScore===w;return '<button onclick="setSKWinScore('+w+')" style="flex:1;padding:10px 0;border-radius:11px;background:'+(s?"#fff":"#1a1a1a")+';border:'+(s?"2px solid #fff":"2px solid #2a2a2a")+';color:'+(s?"#000":"#888")+';font-size:17px;font-weight:800;cursor:pointer;">'+w+'</button>';}).join('')+'</div>':"")+
+  '</div>';
+
+  // Max manches
+  html+='<div style="background:#111;border-radius:12px;padding:13px;margin-bottom:9px;border:1px solid #1e1e1e;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(c.useMaxRounds?"10px":"0")+';">'+
+      '<div><div style="font-size:14px;font-weight:700;">Max manches</div><div style="font-size:11px;color:#555;margin-top:2px;">'+(c.useMaxRounds&&c.maxRounds?"⚠️ Dernière manche affichée":"Arrêt après X manches")+'</div></div>'+
+      '<div onclick="toggleSKMaxRounds()" style="width:44px;height:24px;border-radius:12px;background:'+(c.useMaxRounds?"#1d6fa4":"#333")+';position:relative;cursor:pointer;flex-shrink:0;"><div style="position:absolute;top:3px;left:'+(c.useMaxRounds?22:2)+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>'+
+    '</div>'+
+    (c.useMaxRounds?'<div style="display:flex;gap:6px;flex-wrap:wrap;">'+ mxOpts.map(function(r){var s=c.maxRounds===r;return '<button onclick="setSKMaxRounds('+r+')" style="flex:1;min-width:40px;padding:8px 0;border-radius:10px;background:'+(s?"#1d6fa4":"#1a1a1a")+';border:'+(s?"2px solid #1d6fa4":"2px solid #2a2a2a")+';color:'+(s?"#fff":"#888")+';font-size:14px;font-weight:800;cursor:pointer;line-height:1;">'+r+'<div style="font-size:9px;opacity:.6;margin-top:2px;">'+(r/n)+'×/j</div></button>';}).join('')+'</div>':"")+
+  '</div>';
+
+  // Bust
+  html+='<div onclick="toggleSKBust()" style="background:#111;border-radius:12px;padding:13px;margin-bottom:9px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">'+
+    '<div><div style="font-size:14px;font-weight:700;">Mode Bust</div><div style="font-size:11px;color:#555;margin-top:2px;">Dépasser 21 → retour à 15</div></div>'+
+    '<div style="width:44px;height:24px;border-radius:12px;background:'+(c.gameMode==="bust"?"#f4a100":"#333")+';position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:'+(c.gameMode==="bust"?22:2)+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>'+
+  '</div>';
+
+  // Ghost
+  html+='<div onclick="toggleSKGhost()" style="background:#111;border-radius:12px;padding:13px;margin-bottom:'+(c.ghostMode?"0":"9px")+';border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">'+
+    '<div><div style="font-size:14px;font-weight:700;">Ghost Mode 👻</div><div style="font-size:11px;color:#555;margin-top:2px;">Adversaire virtuel</div></div>'+
+    '<div style="width:44px;height:24px;border-radius:12px;background:'+(c.ghostMode?"#f4a100":"#333")+';position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:'+(c.ghostMode?22:2)+'px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>'+
+  '</div>';
+  if(c.ghostMode){
+    html+='<div style="background:#111;border-radius:11px;padding:12px;margin-bottom:9px;border:1px solid #2a2a2a;">'+
+      '<div style="font-size:11px;color:#555;margin-bottom:7px;">Difficulté</div>'+
+      '<div style="display:flex;gap:6px;">'+ GHOST.map(function(g,i){return '<button onclick="setSKGhostDiff('+i+')" style="flex:1;padding:7px 0;border-radius:9px;background:'+(c.ghostDiff===i?"#f4a100":"#1a1a1a")+';border:none;color:'+(c.ghostDiff===i?"#000":"#888")+';font-size:12px;font-weight:700;cursor:pointer;">'+g.label+'</button>';}).join('')+'</div>'+
+    '</div>';
   }
-  el.innerHTML = html;
+
+  // ACL info
+  html+='<div style="background:#0d1a0d;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #1a2e1a;">'+
+    '<div style="font-size:11px;color:#2e7d32;font-weight:700;margin-bottom:4px;">📋 Règle ACL — Cancellation Scoring</div>'+
+    '<div style="font-size:11px;color:#555;line-height:1.5;">Seule la différence compte par manche.<br/>Ex: A=12pts bruts, B=9pts bruts → <span style="color:#fff;font-weight:700;">A +3 · B +0</span></div>'+
+  '</div>';
+
+  // Preview + Start
+  html+='<div style="display:flex;gap:9px;margin-bottom:14px;">'+
+    ["teamA","teamB"].map(function(k,ki){
+      return '<div style="flex:1;background:'+COLORS[c[k].colorIdx].bg+';border-radius:13px;padding:9px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;">'+
+        (c[k].photo?'<div style="width:24px;height:24px;border-radius:50%;overflow:hidden;border:1px solid rgba(255,255,255,.4);"><img src="'+c[k].photo+'" style="width:100%;height:100%;object-fit:cover;"/></div>':"")  +
+        '<div style="font-size:14px;font-weight:900;color:#fff;">'+(c[k].name||("Équipe "+(ki===0?"A":"B")))+'</div>'+
+      '</div>';
+    }).join('')+'</div>'+
+  '<button onclick="startSKGame()" style="width:100%;padding:17px;border-radius:15px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:21px;font-weight:900;cursor:pointer;letter-spacing:1px;box-shadow:0 6px 24px rgba(244,161,0,.4);">🎯 Commencer la Partie</button>'+
+  '</div>';
+  $("root").innerHTML=html;
 }
 
-function renderSaisieSection(m, st) {
-  const rawA=st.A.trou*3+st.A.plateau, rawB=st.B.trou*3+st.B.plateau;
-  const ptsA=m.cancellation?Math.max(0,rawA-rawB):rawA;
-  const ptsB=m.cancellation?Math.max(0,rawB-rawA):rawB;
-  const sid = m.id; // alias court
-
-  const bagRow = (eq, type, color, vals) =>
-    [1,2,3,4].map(n => {
-      const sel = vals===n;
-      return `<button onclick="setSacsSimple('${sid}','${eq}','${type}',${n})"
-        style="width:46px;height:46px;border-radius:50%;
-               background:${sel?color:"#2a2a2a"};
-               border:2px solid ${sel?color:"#3a3a3a"};
-               color:#fff;
-               font-size:18px;font-weight:800;cursor:pointer;
-               box-shadow:${sel?`0 4px 14px ${color}66`:"none"};
-               transform:${sel?"scale(1.12)":"scale(1)"};
-               transition:all .15s;">${n}</button>`;
-    }).join("");
-
-  return `<div class="saisie-sect" style="background:#0a0a0a;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid #1e1e1e;">
-      <div style="font-size:10px;letter-spacing:2px;color:#444;margin-bottom:10px;">MANCHE ${m.round} — SAISIE ARBITRE</div>
-
-      <!-- Équipe A -->
-      <div style="margin-bottom:10px;">
-        <div style="font-size:12px;color:#e63946;font-weight:700;margin-bottom:7px;letter-spacing:1px;">${m.nomA}</div>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#888;margin-bottom:7px;">Bags In Hole <span style="color:#e63946;font-weight:700;">(3 pts)</span></div>
-            <div style="display:flex;gap:6px;">${bagRow("A","trou","#e63946",st.A.trou)}</div>
-          </div>
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#888;margin-bottom:7px;">Bags On Board <span style="color:#e63946;font-weight:700;">(1 pt)</span></div>
-            <div style="display:flex;gap:6px;">${bagRow("A","plateau","#e63946",st.A.plateau)}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Équipe B -->
-      <div style="margin-bottom:12px;">
-        <div style="font-size:12px;color:#1d6fa4;font-weight:700;margin-bottom:7px;letter-spacing:1px;">${m.nomB}</div>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#888;margin-bottom:7px;">Bags In Hole <span style="color:#1d6fa4;font-weight:700;">(3 pts)</span></div>
-            <div style="display:flex;gap:6px;">${bagRow("B","trou","#1d6fa4",st.B.trou)}</div>
-          </div>
-          <div style="flex:1;">
-            <div style="font-size:11px;color:#888;margin-bottom:7px;">Bags On Board <span style="color:#1d6fa4;font-weight:700;">(1 pt)</span></div>
-            <div style="display:flex;gap:6px;">${bagRow("B","plateau","#1d6fa4",st.B.plateau)}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Points manche avec flip counter -->
-      <div style="background:#111;border-radius:10px;padding:10px 14px;margin-bottom:10px;border:1px solid #1a1a1a;">
-        <div style="font-size:10px;color:#444;letter-spacing:1px;margin-bottom:8px;text-align:center;">
-          POINTS MANCHE ${m.round}${m.cancellation?` <span style="color:#f4a100;">(ACL)</span>`:""}
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
-          <div style="text-align:center;">
-            <div style="font-size:10px;color:#e63946;opacity:.7;margin-bottom:4px;letter-spacing:1px;">${m.nomA.toUpperCase().slice(0,8)}</div>
-            ${flipHTML(ptsA,"#e63946",48,`pts-${sid}-a`)}
-          </div>
-          <div style="font-size:22px;color:#2a2a2a;font-weight:900;">|</div>
-          <div style="text-align:center;">
-            <div style="font-size:10px;color:#1d6fa4;opacity:.7;margin-bottom:4px;letter-spacing:1px;">${m.nomB.toUpperCase().slice(0,8)}</div>
-            ${flipHTML(ptsB,"#1d6fa4",48,`pts-${sid}-b`)}
-          </div>
-        </div>
-        ${m.cancellation&&rawA>0&&rawB>0?`<div style="text-align:center;font-size:10px;color:#333;margin-top:6px;">brut: ${rawA} – ${rawB}</div>`:""}
-      </div>
-
-      <div style="display:flex;gap:8px;">
-        <button onclick="annulerSaisie('${sid}')" style="flex:1;padding:11px;border-radius:10px;background:#1a1a1a;border:1px solid #2a2a2a;color:#666;font-size:14px;font-weight:700;cursor:pointer;">✕ Annuler</button>
-        <button onclick="validerMancheSimple('${sid}')" style="flex:2;padding:11px;border-radius:10px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;letter-spacing:1px;">✓ Valider Manche</button>
-      </div>
-    </div>`;
-}
-
-function renderCarteSimple(m) {
-  const st = sacsEnCours[m.id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  const gagnant = m.scoreA>=m.winScore?m.nomA:m.scoreB>=m.winScore?m.nomB:null;
-
-  return `<div id="carte-${m.id}" style="background:#111;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid ${gagnant?"#f4a10044":"#1e1e1e"};">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div>
-        <div style="font-size:15px;font-weight:900;">${m.nomA} <span style="color:#444;">vs</span> ${m.nomB}</div>
-        <div class="match-info" style="font-size:11px;color:#444;margin-top:1px;">${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;">
-        ${flipHTML(m.scoreA,"#e63946",52,`s-${m.id}-a`)}
-        <div style="font-size:18px;color:#222;font-weight:900;">–</div>
-        ${flipHTML(m.scoreB,"#1d6fa4",52,`s-${m.id}-b`)}
-      </div>
-    </div>
-    <div style="display:flex;gap:4px;margin-bottom:10px;">
-      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div class="bar-a" style="width:${Math.min((m.scoreA/m.winScore)*100,100)}%;background:#e63946;height:4px;transition:width .6s;"></div></div>
-      <div style="flex:1;background:#0d0d0d;border-radius:4px;height:4px;overflow:hidden;"><div class="bar-b" style="width:${Math.min((m.scoreB/m.winScore)*100,100)}%;background:#1d6fa4;height:4px;float:right;transition:width .6s;"></div></div>
-    </div>
-    ${gagnant
-      ? `<div style="background:linear-gradient(135deg,#b37700,#f4a100);border-radius:10px;padding:10px;text-align:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:900;color:#000;">🏆 ${gagnant} GAGNE !</div></div>`
-      : renderSaisieSection(m, st)
-    }
-    <div style="display:flex;gap:6px;">
-      ${gagnant?`<button onclick="revancher('${m.id}')" style="flex:1;padding:8px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#f4a100;font-size:12px;font-weight:700;cursor:pointer;">🔄 Revanche</button>`:""}
-      <button onclick="supprimerMatchSimple('${m.id}')" style="padding:8px 14px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:12px;cursor:pointer;">🗑 Supprimer</button>
-    </div>
-  </div>`;
-}
-
-function renderCarteTermineeSimple(m) {
-  const g=m.scoreA>m.scoreB?m.nomA:m.nomB;
-  return `<div style="background:#0d0d0d;border-radius:11px;padding:11px 14px;margin-bottom:8px;border:1px solid #151515;opacity:.75;">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <div><div style="font-size:13px;font-weight:700;">${m.nomA} vs ${m.nomB}</div><div style="font-size:11px;color:#f4a100;margin-top:1px;">🏆 ${g} · ${m.round-1} manches</div></div>
-      <div><span style="font-size:22px;font-weight:900;color:#e63946;">${m.scoreA}</span><span style="color:#222;margin:0 4px;">–</span><span style="font-size:22px;font-weight:900;color:#1d6fa4;">${m.scoreB}</span></div>
-    </div>
-    <button onclick="supprimerMatchSimple('${m.id}')" style="margin-top:7px;padding:5px 10px;border-radius:6px;background:#1a1a1a;border:1px solid #222;color:#444;font-size:11px;cursor:pointer;">🗑</button>
-  </div>`;
-}
-
-window.ajouterMatchSimple=()=>{
-  const nomA=$("sNomA").value.trim(),nomB=$("sNomB").value.trim();
-  if(!nomA||!nomB){alert("Entre les deux noms !");return;}
-  matchsSimple.unshift({id:uid(),nomA,nomB,terrain:$("sTerrain").value,winScore:parseInt($("sWin").value)||21,cancellation:$("sCancel").checked,scoreA:0,scoreB:0,round:1,termine:false});
-  saveSimple();$("sNomA").value="";$("sNomB").value="";renderListeSimple();
+window.setSKPPT    = function(v){sk.cfg.playersPerTeam=v;renderSKSetup();};
+window.setSKPhoto  = function(key,inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){sk.cfg[key].photo=e.target.result;renderSKSetup();};r.readAsDataURL(f);};
+window.clearSKPhoto= function(key){sk.cfg[key].photo=null;renderSKSetup();};
+window.setSKColor  = function(key,ci){sk.cfg[key].colorIdx=ci;renderSKSetup();};
+window.setSKWinScore    = function(w){sk.cfg.winScore=w;renderSKSetup();};
+window.toggleSKWinScore = function(){sk.cfg.useWinScore=!sk.cfg.useWinScore;renderSKSetup();};
+window.setSKMaxRounds    = function(r){sk.cfg.maxRounds=r;renderSKSetup();};
+window.toggleSKMaxRounds = function(){sk.cfg.useMaxRounds=!sk.cfg.useMaxRounds;renderSKSetup();};
+window.toggleSKBust  = function(){sk.cfg.gameMode=sk.cfg.gameMode==="bust"?"standard":"bust";renderSKSetup();};
+window.toggleSKGhost = function(){sk.cfg.ghostMode=!sk.cfg.ghostMode;renderSKSetup();};
+window.setSKGhostDiff= function(i){sk.cfg.ghostDiff=i;renderSKSetup();};
+window.startSKGame   = function(){
+  sk.game={scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};
+  sk.showScore=false;sk.showStats=false;renderSKGame();
 };
-window.setSacsSimple=(id,eq,type,val)=>{
-  if(!sacsEnCours[id])sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  sacsEnCours[id][eq][type]=sacsEnCours[id][eq][type]===val?0:val;
-  const m = matchsSimple.find(x=>x.id===id);
-  const sect = document.querySelector(`#carte-${id} .saisie-sect`);
-  if(sect && m){
-    sect.outerHTML = renderSaisieSection(m, sacsEnCours[id]);
-    // Animer les flip des points manche
-    const st=sacsEnCours[id];
-    const rawA=st.A.trou*3+st.A.plateau, rawB=st.B.trou*3+st.B.plateau;
-    const ptsA=m.cancellation?Math.max(0,rawA-rawB):rawA;
-    const ptsB=m.cancellation?Math.max(0,rawB-rawA):rawB;
-    setTimeout(()=>{
-      flipTo(`pts-${id}-a`, ptsA);
-      flipTo(`pts-${id}-b`, ptsB);
-    }, 20);
-  } else renderListeSimple();
-};
-window.annulerSaisie=(id)=>{
-  sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  const m = matchsSimple.find(x=>x.id===id);
-  const sect = document.querySelector(`#carte-${id} .saisie-sect`);
-  if(sect && m) sect.outerHTML = renderSaisieSection(m, sacsEnCours[id]);
-  else renderListeSimple();
-};
-window.validerMancheSimple=(id)=>{
-  const m=matchsSimple.find(x=>x.id===id);if(!m)return;
-  const st=sacsEnCours[id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  const rawA=st.A.trou*3+st.A.plateau,rawB=st.B.trou*3+st.B.plateau;
-  const ptsA=m.cancellation?Math.max(0,rawA-rawB):rawA;
-  const ptsB=m.cancellation?Math.max(0,rawB-rawA):rawB;
-  m.scoreA+=ptsA;m.scoreB+=ptsB;m.round++;
-  if(m.scoreA>=m.winScore||m.scoreB>=m.winScore)m.termine=true;
-  sacsEnCours[id]={A:{trou:0,plateau:0},B:{trou:0,plateau:0}};
-  saveSimple();
 
-  if(m.termine){
-    // Partie terminée : re-render complet pour afficher le banner gagnant
-    renderListeSimple();
-  } else {
-    // Pas terminée : flip in-place, puis re-render les boutons seulement
-    if(ptsA>0) flipTo(`s-${id}-a`, m.scoreA);
-    if(ptsB>0) flipTo(`s-${id}-b`, m.scoreB);
-    // Mettre à jour les barres de progression sans full re-render
-    const barA = document.querySelector(`#carte-${id} .bar-a`);
-    const barB = document.querySelector(`#carte-${id} .bar-b`);
-    if(barA) barA.style.width = Math.min((m.scoreA/m.winScore)*100,100)+"%";
-    if(barB) barB.style.width = Math.min((m.scoreB/m.winScore)*100,100)+"%";
-    // Re-render uniquement la section saisie pour le round suivant
-    const saisieSect = document.querySelector(`#carte-${id} .saisie-sect`);
-    if(saisieSect) saisieSect.outerHTML = renderSaisieSection(m, sacsEnCours[id]||{A:{trou:0,plateau:0},B:{trou:0,plateau:0}});
-    // Mettre à jour le numéro de manche
-    const infoEl = document.querySelector(`#carte-${id} .match-info`);
-    if(infoEl) infoEl.innerHTML = `${m.terrain?m.terrain+" · ":""}${m.winScore}pts · Manche ${m.round}${m.cancellation?" · <span style='color:#f4a100;font-size:10px;'>ACL</span>":""}`;
+// === SCOREKEEPER GAME ===
+function renderSKGame() {
+  var c=sk.cfg, g=sk.game;
+  var cA=COLORS[c.teamA.colorIdx], cB=COLORS[c.teamB.colorIdx];
+  var ghost=GHOST[c.ghostDiff];
+  var isLast=c.useMaxRounds&&c.maxRounds&&g.round===c.maxRounds;
+
+  function scorePanel(name,score,col,lead,photo,players,pid){
+    return '<div style="flex:1;background:'+col.bg+';border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;box-shadow:0 8px 32px '+col.s+'44;position:relative;overflow:hidden;">'+
+      '<div style="position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.06);"></div>'+
+      (lead?'<div style="position:absolute;top:6px;right:8px;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.7);background:rgba(0,0,0,.2);border-radius:5px;padding:2px 5px;">LEADING</div>':"")+
+      (photo?'<img src="'+photo+'" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4);margin-bottom:4px;"/>':"")+
+      '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:6px;text-align:center;">'+name+'</div>'+
+      (c.playersPerTeam===2&&players&&players.filter(function(p){return p;}).length?'<div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:4px;">'+players.filter(function(p){return p;}).slice(0,2).join(" · ")+'</div>':"")+
+      '<div style="margin:4px 0;">'+flipHTML(score,"#fff",72,pid)+'</div>'+
+      '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px;">/ '+c.winScore+' pts</div>'+
+      '<div style="width:100%;background:rgba(0,0,0,.2);border-radius:6px;height:5px;margin-top:8px;"><div style="width:'+Math.min((score/c.winScore)*100,100)+'%;background:#fff;border-radius:6px;height:5px;opacity:.8;transition:width .5s;"></div></div>'+
+    '</div>';
   }
-};
-function animScore(elId){const el=document.getElementById(elId);if(!el)return;el.classList.remove("score-pop");void el.offsetWidth;el.classList.add("score-pop");}
-window.supprimerMatchSimple=(id)=>{if(!confirm("Supprimer ce match ?"))return;matchsSimple=matchsSimple.filter(m=>m.id!==id);delete sacsEnCours[id];saveSimple();renderListeSimple();};
-window.revancher=(id)=>{const o=matchsSimple.find(m=>m.id===id);if(!o)return;matchsSimple.unshift({id:uid(),nomA:o.nomA,nomB:o.nomB,terrain:o.terrain,winScore:o.winScore,cancellation:o.cancellation,scoreA:0,scoreB:0,round:1,termine:false});saveSimple();renderListeSimple();};
-window.renderHome=renderHome;
-window.renderSimple=renderSimple;
 
-// ════════════════════════════════════════
-// SCOREKEEPER COMPLET (standalone, sans Firebase)
-// ════════════════════════════════════════
-window.goScorekeeper=()=>{ sk.screen="setup"; renderSKSetup(); };
+  var html=
+    '<div style="padding:13px 14px 0;display:flex;align-items:center;justify-content:space-between;">'+
+      '<button onclick="renderSKSetup()" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:5px 11px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;">◀ Setup</button>'+
+      '<div style="text-align:center;">'+(c.tournamentName?'<div style="font-size:10px;color:#f4a100;letter-spacing:2px;font-weight:700;">'+c.tournamentName+'</div>':"")+
+        '<div style="font-size:10px;letter-spacing:3px;color:#444;">CORNHOLE · ACL SCORING</div></div>'+
+      '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:5px 11px;font-size:12px;font-weight:700;color:#aaa;">'+(c.useMaxRounds?g.round+"/"+c.maxRounds:"R"+g.round)+'</div>'+
+    '</div>';
 
-function renderSKSetup(){
-  const c=sk.cfg;
-  const n=c.playersPerTeam;
-  const cA=COLORS[c.teamA.colorIdx],cB=COLORS[c.teamB.colorIdx];
-  const multiples=[];let mi=1;while(multiples.length<4){const v=n*mi;if(v>=2&&v<=40)multiples.push(v);mi++;if(mi>50)break;}
+  if(isLast){
+    html+='<div style="margin:8px 14px 0;background:#7f000022;border-radius:11px;padding:8px 14px;border:1px solid #e6394644;text-align:center;animation:last-round-pulse 1.2s ease-in-out infinite;">'+
+      '<div style="font-size:14px;font-weight:900;color:#e63946;">⚠️ DERNIÈRE MANCHE</div></div>';
+  }
 
-  $("root").innerHTML=`
-    <div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-      ${backBtn("renderHome")}
-      <div><div style="font-size:10px;letter-spacing:3px;color:#555;">SCOREKEEPER</div><div style="font-size:22px;font-weight:900;">CONFIGURATION</div></div>
-    </div>
-    <div style="flex:1;padding:0 18px 18px;overflow-y:auto;">
+  var badges=[c.playersPerTeam+"v"+c.playersPerTeam,"ACL Cancel.",c.gameMode==="bust"&&"BUST →15",c.ghostMode&&"👻 "+ghost.label,c.useMaxRounds&&c.maxRounds+" manches"].filter(Boolean);
+  html+='<div style="padding:6px 14px;display:flex;gap:5px;flex-wrap:wrap;">'+
+    badges.map(function(b){return '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:18px;padding:2px 9px;font-size:10px;color:#aaa;letter-spacing:1px;font-weight:700;">'+b+'</div>';}).join('')+'</div>';
 
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-top:16px;margin-bottom:8px;">NOM DE L'ÉVÉNEMENT</div>
-      <input id="sk-nom" value="${c.tournamentName}" placeholder="Ex: Open Cornhole 2025" oninput="sk.cfg.tournamentName=this.value"
-        style="width:100%;background:#111;border:1px solid #2a2a2a;border-radius:11px;padding:12px 14px;color:#fff;font-size:17px;font-weight:700;box-sizing:border-box;"/>
+  html+='<div style="padding:0 14px;display:flex;gap:9px;min-height:200px;">'+
+    scorePanel(c.teamA.name,g.scores.a,cA,g.scores.a>g.scores.b,c.teamA.photo,c.teamA.players,"sk-a")+
+    (c.ghostMode?
+      '<div style="flex:1;background:#1a1a1a;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;border:1px solid #2a2a2a;position:relative;">'+
+        '<div style="position:absolute;top:8px;right:8px;font-size:18px;">👻</div>'+
+        '<div style="font-size:11px;font-weight:800;letter-spacing:2px;color:#444;margin-bottom:6px;">GHOST</div>'+
+        '<div style="margin:4px 0;">'+flipHTML(g.scores.b,"#555",72,"sk-b")+'</div>'+
+      '</div>'
+      :scorePanel(c.teamB.name,g.scores.b,cB,g.scores.b>g.scores.a,c.teamB.photo,c.teamB.players,"sk-b"))+
+  '</div>';
 
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-top:16px;margin-bottom:8px;">FORMAT</div>
-      <div style="display:flex;gap:10px;margin-bottom:6px;">
-        ${[1,2].map(v=>`<button onclick="setSKPPT(${v})" style="flex:1;padding:14px 0;border-radius:13px;background:${n===v?"#fff":"#1a1a1a"};border:${n===v?"2px solid #fff":"2px solid #2a2a2a"};color:${n===v?"#000":"#888"};font-size:22px;font-weight:900;cursor:pointer;">${v}v${v}<div style="font-size:11px;font-weight:600;margin-top:3px;opacity:.6;">${v===1?"Solo":"Duo"}</div></button>`).join("")}
-      </div>
+  if(g.history.length){
+    html+='<div style="padding:10px 14px 0;"><div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;">'+
+      g.history.slice().reverse().map(function(h){
+        return '<div style="background:#1a1a1a;border-radius:7px;padding:5px 9px;min-width:58px;text-align:center;border:1px solid #222;flex-shrink:0;">'+
+          '<div style="font-size:9px;color:#444;margin-bottom:1px;">R'+h.round+'</div>'+
+          '<div style="font-size:12px;font-weight:700;"><span style="color:'+cA.s+';">+'+h.pts.a+'</span><span style="color:#333;margin:0 2px;">|</span><span style="color:'+(c.ghostMode?"#555":cB.s)+';">+'+h.pts.b+'</span></div>'+
+          '<div style="font-size:9px;color:#333;margin-top:1px;">'+h.raw.a+'–'+h.raw.b+'</div>'+
+        '</div>';
+      }).join('')+'</div></div>';
+  }
 
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-top:16px;margin-bottom:8px;">ÉQUIPES</div>
-      ${["teamA","teamB"].map((key,ki)=>`
-      <div style="background:#111;border-radius:13px;padding:13px;margin-bottom:9px;border:1px solid #1e1e1e;">
-        <div style="font-size:11px;color:#555;margin-bottom:7px;">Équipe ${ki===0?"A":"B"}</div>
-        <div style="display:flex;gap:9px;align-items:center;margin-bottom:9px;">
-          <div style="position:relative;flex-shrink:0;">
-            <div style="width:50px;height:50px;border-radius:10px;background:${c[key].photo?"transparent":"#1a1a1a"};border:2px dashed ${c[key].photo?COLORS[c[key].colorIdx].s:"#333"};overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;">
-              ${c[key].photo?`<img src="${c[key].photo}" style="width:100%;height:100%;object-fit:cover;"/>`:`<span style="font-size:20px;">📷</span>`}
-            </div>
-            <input type="file" accept="image/*" onchange="setSKPhoto('${key}',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>
-            ${c[key].photo?`<div onclick="window['clearSKPhoto${key==='teamA'?'A':'B'}']&&clearSKPhoto${key==='teamA'?'A':'B'}()" style="position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;background:#e63946;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:900;">✕</div>`:""}
-          </div>
-          <input value="${c[key].name}" oninput="window.sk.cfg.${key}.name=this.value" placeholder="Équipe ${ki===0?"A":"B"}"
-            style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:10px 11px;color:#fff;font-size:15px;font-weight:700;box-sizing:border-box;"/>
-        </div>
-        <div style="display:flex;gap:7px;margin-bottom:9px;">
-          ${n===1
-            ?`<input value="${c[key].players?.[0]||""}" oninput="window.sk.cfg.${key}.players[0]=this.value" placeholder="Nom du joueur" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
-            :`<input value="${c[key].players?.[0]||""}" oninput="window.sk.cfg.${key}.players[0]=this.value" placeholder="Joueur 1" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>
-             <input value="${c[key].players?.[1]||""}" oninput="window.sk.cfg.${key}.players[1]=this.value" placeholder="Joueur 2" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 10px;color:#aaa;font-size:13px;"/>`
-          }
-        </div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${COLORS.map((cl,ci)=>`<div onclick="window.setSKColor${key==='teamA'?'A':'B'}(${ci})" style="width:26px;height:26px;border-radius:50%;background:${cl.s};border:${c[key].colorIdx===ci?"2px solid #fff":"2px solid transparent"};cursor:pointer;box-shadow:${c[key].colorIdx===ci?`0 0 7px ${cl.s}`:"none"};"></div>`).join("")}
-        </div>
-      </div>`).join("")}
+  html+='<div style="padding:14px;display:flex;gap:7px;">'+
+    '<button onclick="skStats()" style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;font-size:13px;font-weight:700;cursor:pointer;">📊</button>'+
+    '<button onclick="skUndo()" '+(g.history.length?"":"disabled")+' style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:'+(g.history.length?"#aaa":"#333")+';font-size:13px;font-weight:700;cursor:'+(g.history.length?"pointer":"not-allowed")+';">↩</button>'+
+    '<button onclick="skReset()" style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;font-size:13px;font-weight:700;cursor:pointer;">↺</button>'+
+    '<button onclick="skOpenScore()" style="flex:3;padding:11px 0;border-radius:11px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 20px rgba(244,161,0,.3);">+ ENTER SCORES</button>'+
+  '</div>';
 
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-top:14px;margin-bottom:8px;">MODE DE JEU</div>
-      <div style="display:flex;gap:7px;margin-bottom:8px;">
-        ${[["standard","Standard"],["bust","Bust"],["rounds","Rounds"]].map(([id,lbl])=>`<button onclick="setSKGameMode('${id}')" style="flex:1;padding:10px 0;border-radius:11px;background:${c.gameMode===id?"#fff":"#1a1a1a"};border:${c.gameMode===id?"2px solid #fff":"2px solid #2a2a2a"};color:${c.gameMode===id?"#000":"#888"};font-size:13px;font-weight:800;cursor:pointer;">${lbl}</button>`).join("")}
-      </div>
-      <div style="background:#0d0d0d;border-radius:10px;padding:10px 12px;margin-bottom:12px;border:1px solid #1a1a1a;font-size:11px;color:#555;line-height:1.4;">
-        ${c.gameMode==="standard"?"Premier à atteindre ou dépasser le score gagnant.":c.gameMode==="bust"?"Dépasser 21 → score redescend à 15. Fin de partie tactique.":"Nombre fixe de manches. Le score le plus élevé gagne."}
-      </div>
-
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:6px;">SCORE CIBLE</div>
-      <div style="display:flex;gap:7px;margin-bottom:7px;">
-        ${[11,15,21,25].map(w=>`<button onclick="setSKWinScore(${w})" style="flex:1;padding:10px 0;border-radius:11px;background:${c.useWinScore&&c.winScore===w?"#fff":"#1a1a1a"};border:${c.useWinScore&&c.winScore===w?"2px solid #fff":"2px solid #2a2a2a"};color:${c.useWinScore&&c.winScore===w?"#000":"#888"};font-size:16px;font-weight:800;cursor:pointer;">${w}</button>`).join("")}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="toggleSKWinScore()">
-        <div style="width:44px;height:24px;border-radius:12px;background:${c.useWinScore?"#f4a100":"#333"};position:relative;cursor:pointer;flex-shrink:0;"><div style="position:absolute;top:3px;left:${c.useWinScore?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>
-        <span style="font-size:12px;color:${c.useWinScore?"#f4a100":"#555"};font-weight:700;">${c.useWinScore?"Activé":"Désactivé"}</span>
-      </div>
-
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:6px;">MAX MANCHES <span style="color:#444;">(multiples de ${n})</span></div>
-      <div style="display:flex;gap:7px;margin-bottom:7px;">
-        ${multiples.map(r=>`<button onclick="setSKMaxRounds(${r})" style="flex:1;padding:8px 0;border-radius:11px;background:${c.useMaxRounds&&c.maxRounds===r?"#1d6fa4":"#1a1a1a"};border:${c.useMaxRounds&&c.maxRounds===r?"2px solid #1d6fa4":"2px solid #2a2a2a"};color:${c.useMaxRounds&&c.maxRounds===r?"#fff":"#888"};font-weight:800;cursor:pointer;font-size:16px;">${r}<div style="font-size:9px;opacity:.6;">${r/n}×/j</div></button>`).join("")}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;" onclick="toggleSKMaxRounds()">
-        <div style="width:44px;height:24px;border-radius:12px;background:${c.useMaxRounds?"#1d6fa4":"#333"};position:relative;cursor:pointer;flex-shrink:0;"><div style="position:absolute;top:3px;left:${c.useMaxRounds?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;"></div></div>
-        <span style="font-size:12px;color:${c.useMaxRounds?"#1d6fa4":"#555"};font-weight:700;">${c.useMaxRounds?"Activé":"Désactivé"}</span>
-      </div>
-
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">OPTIONS</div>
-      <div onclick="toggleSKCancellation()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:7px;border:1px solid ${c.cancellation?"#f4a10044":"#1e1e1e"};display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-        <div><div style="font-size:14px;font-weight:700;">Cancellation Scoring ${c.cancellation?`<span style="font-size:11px;color:#f4a100;">(ACL)</span>`:""}</div>
-        <div style="font-size:11px;color:#555;margin-top:3px;">${c.cancellation?"Seule la différence compte. Ex: A=7, B=5 → A+2, B+0":"Straight scoring : chaque équipe marque ses points bruts"}</div></div>
-        <div style="width:44px;height:24px;border-radius:12px;background:${c.cancellation?"#f4a100":"#333"};position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:${c.cancellation?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;"></div></div>
-      </div>
-      <div onclick="toggleSKGhost()" style="background:#111;border-radius:11px;padding:11px 13px;margin-bottom:14px;border:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-        <div><div style="font-size:14px;font-weight:700;">Ghost Mode 👻</div><div style="font-size:11px;color:#555;margin-top:3px;">Jouer contre un adversaire virtuel</div></div>
-        <div style="width:44px;height:24px;border-radius:12px;background:${c.ghostMode?"#f4a100":"#333"};position:relative;flex-shrink:0;margin-left:10px;"><div style="position:absolute;top:3px;left:${c.ghostMode?22:2}px;width:18px;height:18px;border-radius:50%;background:#fff;"></div></div>
-      </div>
-      ${c.ghostMode?`<div style="background:#111;border-radius:11px;padding:12px;margin-bottom:14px;border:1px solid #2a2a2a;">
-        <div style="font-size:11px;color:#555;margin-bottom:7px;">Difficulté Ghost</div>
-        <div style="display:flex;gap:6px;">${GHOST.map((g,i)=>`<button onclick="setSKGhostDiff(${i})" style="flex:1;padding:7px 0;border-radius:9px;background:${c.ghostDiff===i?"#f4a100":"#1a1a1a"};border:none;color:${c.ghostDiff===i?"#000":"#888"};font-size:12px;font-weight:700;cursor:pointer;">${g.label}</button>`).join("")}</div>
-      </div>`:""}
-
-      <!-- Preview -->
-      <div style="display:flex;gap:9px;margin-bottom:13px;">
-        ${["teamA","teamB"].map((k,ki)=>`<div style="flex:1;background:${COLORS[c[k].colorIdx].bg};border-radius:13px;padding:9px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;">
-          ${c[k].photo?`<div style="width:24px;height:24px;border-radius:50%;overflow:hidden;border:1px solid rgba(255,255,255,.4);"><img src="${c[k].photo}" style="width:100%;height:100%;object-fit:cover;"/></div>`:""}
-          <div style="font-size:14px;font-weight:900;color:#fff;">${c[k].name||`Équipe ${ki===0?"A":"B"}`}</div>
-        </div>`).join("")}
-      </div>
-      <button onclick="startSKGame()" style="width:100%;padding:17px 0;border-radius:15px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:21px;font-weight:900;cursor:pointer;letter-spacing:1px;box-shadow:0 6px 24px rgba(244,161,0,.4);">🎯 Commencer la Partie</button>
-    </div>`;
+  if(sk.showScore) html+=renderSKScoreModal();
+  if(sk.showStats) html+=renderSKStatsModal();
+  if(g.winner&&g.winner!=="tie") html+=renderSKWinner();
+  if(g.winner==="tie") html+=renderSKTie();
+  $("root").innerHTML=html;
 }
 
-window.setSKPPT=(v)=>{sk.cfg.playersPerTeam=v;renderSKSetup();};
-window.setSKPhoto=(key,input)=>{const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{sk.cfg[key].photo=ev.target.result;renderSKSetup();};r.readAsDataURL(f);};
-window.startSKGame=()=>{sk.game={scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};sk.screen="game";sk.showScore=false;sk.showStats=false;renderSKGame();};
-window.setSKGameMode=(m)=>{sk.cfg.gameMode=m;renderSKSetup();};
-window.setSKWinScore=(w)=>{sk.cfg.winScore=w;sk.cfg.useWinScore=true;renderSKSetup();};
-window.toggleSKWinScore=()=>{sk.cfg.useWinScore=!sk.cfg.useWinScore;renderSKSetup();};
-window.setSKMaxRounds=(r)=>{sk.cfg.maxRounds=r;sk.cfg.useMaxRounds=true;renderSKSetup();};
-window.toggleSKMaxRounds=()=>{sk.cfg.useMaxRounds=!sk.cfg.useMaxRounds;renderSKSetup();};
-window.toggleSKCancellation=()=>{sk.cfg.cancellation=!sk.cfg.cancellation;renderSKSetup();};
-window.toggleSKGhost=()=>{sk.cfg.ghostMode=!sk.cfg.ghostMode;renderSKSetup();};
-window.setSKGhostDiff=(i)=>{sk.cfg.ghostDiff=i;renderSKSetup();};
-window.setSKColorA=(i)=>{sk.cfg.teamA.colorIdx=i;renderSKSetup();};
-window.setSKColorB=(i)=>{sk.cfg.teamB.colorIdx=i;renderSKSetup();};
-window.clearSKPhotoA=()=>{sk.cfg.teamA.photo=null;renderSKSetup();};
-window.clearSKPhotoB=()=>{sk.cfg.teamB.photo=null;renderSKSetup();};
-window.setSKNameA=(v)=>{sk.cfg.teamA.name=v;};
-window.setSKNameB=(v)=>{sk.cfg.teamB.name=v;};
-window.setSKPlayer=(team,idx,v)=>{sk.cfg[team].players[idx]=v;};
-window.setSKTournamentName=(v)=>{sk.cfg.tournamentName=v;};
-
-function renderSKGame(){
-  const c=sk.cfg,g=sk.game;
-  const cA=COLORS[c.teamA.colorIdx],cB=COLORS[c.teamB.colorIdx];
-  const rawA=g.entry.a.hole*3+g.entry.a.board,rawB=g.entry.b.hole*3+g.entry.b.board;
-  const prev=calcPts(g.entry,c.cancellation);
-  const ghost=GHOST_PRESET();
-
-  const scorePanel=(name,score,col,lead,photo,players,panelId)=>`
-    <div style="flex:1;background:${col.bg};border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;box-shadow:0 8px 32px ${col.s}44;position:relative;overflow:hidden;">
-      <div style="position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.06);"></div>
-      ${lead?`<div style="position:absolute;top:6px;right:8px;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.7);background:rgba(0,0,0,.2);border-radius:5px;padding:2px 5px;">LEADING</div>`:""}
-      ${photo?`<img src="${photo}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.4);margin-bottom:4px;"/>` : ""}
-      <div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:8px;text-align:center;max-width:90%;line-height:1.1;">${name}</div>
-      ${c.playersPerTeam===2&&players?.filter(p=>p).length>0?`<div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:6px;">${players.filter(p=>p).slice(0,2).join(" · ")}</div>`:""}
-      <div style="margin:4px 0;">${flipHTML(score,"#fff",72,panelId)}</div>
-      <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:4px;">/ ${c.winScore} pts</div>
-      <div style="width:100%;background:rgba(0,0,0,.2);border-radius:6px;height:5px;margin-top:8px;"><div style="width:${Math.min((score/c.winScore)*100,100)}%;background:#fff;border-radius:6px;height:5px;opacity:.8;transition:width .5s ease;"></div></div>
-    </div>`;
-
-  $("root").innerHTML=`
-    <div style="padding:13px 14px 0;display:flex;align-items:center;justify-content:space-between;">
-      <button onclick="renderSKSetup()" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:5px 11px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;">◀ Setup</button>
-      <div style="text-align:center;">
-        ${c.tournamentName?`<div style="font-size:10px;color:#f4a100;letter-spacing:2px;font-weight:700;">🏆 ${c.tournamentName}</div>`:""}
-        <div style="font-size:10px;letter-spacing:3px;color:#444;">CORNHOLE SCOREKEEPER</div>
-      </div>
-      <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:9px;padding:5px 11px;font-size:12px;font-weight:700;color:#aaa;">${c.useMaxRounds?`${g.round-1}/${c.maxRounds}`:`R${g.round}`}</div>
-    </div>
-    <div style="padding:6px 14px;display:flex;gap:5px;flex-wrap:wrap;">
-      ${[`${c.playersPerTeam}v${c.playersPerTeam}`,c.cancellation&&"ACL CANCEL.",c.gameMode==="bust"&&"BUST +21→15",c.ghostMode&&`👻 ${ghost.label}`,c.useMaxRounds&&`${Math.round(c.maxRounds/c.playersPerTeam)}×/j`].filter(Boolean).map(b=>`<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:18px;padding:2px 9px;font-size:10px;color:#aaa;letter-spacing:1px;font-weight:700;">${b}</div>`).join("")}
-    </div>
-    <div style="padding:0 14px;display:flex;gap:9px;flex:1;min-height:200px;">
-      ${scorePanel(c.teamA.name,g.scores.a,cA,g.scores.a>g.scores.b,c.teamA.photo,c.teamA.players,"sk-a")}
-      ${c.ghostMode
-        ?`<div style="flex:1;background:#1a1a1a;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;border:1px solid #2a2a2a;position:relative;"><div style="position:absolute;top:8px;right:8px;font-size:18px;">👻</div><div style="font-size:11px;font-weight:800;letter-spacing:2px;color:#444;margin-bottom:2px;">GHOST</div><div style="font-size:76px;font-weight:900;line-height:1;color:#444;">${g.scores.b}</div></div>`
-        :scorePanel(c.teamB.name,g.scores.b,cB,g.scores.b>g.scores.a,c.teamB.photo,c.teamB.players,"sk-b")
-      }
-    </div>
-    ${g.history.length?`<div style="padding:10px 14px 0;"><div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;">${g.history.slice().reverse().map(h=>`<div style="background:#1a1a1a;border-radius:7px;padding:5px 9px;min-width:56px;text-align:center;border:1px solid #222;flex-shrink:0;"><div style="font-size:9px;color:#444;margin-bottom:1px;">R${h.round}</div><div style="font-size:12px;font-weight:700;"><span style="color:${cA.s};">+${h.pts.a}</span><span style="color:#333;margin:0 2px;">|</span><span style="color:${c.ghostMode?"#555":cB.s};">+${h.pts.b}</span></div></div>`).join("")}</div></div>`:""}
-    ${c.sponsors.length?`<div style="margin:8px 14px 0;background:#111;border-radius:9px;padding:5px 0;overflow:hidden;border:1px solid #1e1e1e;"><div style="display:flex;animation:ticker ${c.sponsors.length*4}s linear infinite;width:max-content;">${[...c.sponsors,...c.sponsors].map(sp=>`<div style="display:flex;align-items:center;gap:7px;padding:0 20px;border-right:1px solid #222;flex-shrink:0;">${sp.logo?`<img src="${sp.logo}" style="height:20px;width:auto;object-fit:contain;opacity:.8;"/>`:""}${sp.name?`<span style="font-size:12px;font-weight:700;color:#555;letter-spacing:1px;white-space:nowrap;">${sp.name}</span>`:""}</div>`).join("")}</div></div>`:""}
-    <div style="padding:14px;display:flex;gap:7px;">
-      <button onclick="skShowStats()" style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;font-size:13px;font-weight:700;cursor:pointer;">📊</button>
-      <button onclick="skUndo()" ${!g.history.length?"disabled":""} style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:${g.history.length?"#aaa":"#333"};font-size:13px;font-weight:700;cursor:${g.history.length?"pointer":"not-allowed"};">↩</button>
-      <button onclick="skReset()" style="flex:1;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;font-size:13px;font-weight:700;cursor:pointer;">↺</button>
-      <button onclick="skOpenScore()" style="flex:3;padding:11px 0;border-radius:11px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 20px rgba(244,161,0,.3);">+ Score</button>
-    </div>
-    ${sk.showScore?renderSKScoreModal():""}
-    ${sk.showStats?renderSKStatsModal():""}
-    ${g.winner&&g.winner!=="tie"?renderSKWinner():""}
-    ${g.winner==="tie"?renderSKTie():""}`;
+// === SK MODALS + ACTIONS ===
+function renderSKScoreModal() {
+  var c=sk.cfg, g=sk.game;
+  var cA=COLORS[c.teamA.colorIdx], cB=COLORS[c.teamB.colorIdx];
+  var m=calcManche(g.entry.a,g.entry.b);
+  var ghost=GHOST[c.ghostDiff];
+  function bagRow(key,type,color){
+    return [1,2,3,4].map(function(n){
+      var sel=g.entry[key][type]===n;
+      return '<button onclick="setSKEntry(\''+key+'\',\''+type+'\','+n+')" style="width:46px;height:46px;border-radius:50%;background:'+(sel?color:"#2a2a2a")+';border:2px solid '+(sel?color:"#3a3a3a")+';color:#fff;font-size:18px;font-weight:800;cursor:pointer;box-shadow:'+(sel?"0 4px 14px "+color+"66":"none")+';transform:'+(sel?"scale(1.12)":"scale(1)")+';transition:all .15s;">'+n+'</button>';
+    }).join('');
+  }
+  var html='<div style="position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);">'+
+    '<div style="background:#111;border-radius:18px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,.8);border:1px solid #2a2a2a;max-height:90vh;overflow-y:auto;">'+
+      '<div style="background:#1e1e1e;border-radius:18px 18px 0 0;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="font-size:18px;font-weight:900;letter-spacing:2px;">ENTER SCORES</div>'+
+        '<div style="background:#fff;border-radius:20px;padding:4px 14px;font-size:14px;font-weight:900;color:#000;">Round '+g.round+'</div>'+
+      '</div>'+
+      '<div style="padding:18px;">'+
+        // Team A
+        '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:20px;font-weight:900;color:'+cA.s+';letter-spacing:2px;margin-bottom:10px;text-align:center;">'+c.teamA.name.toUpperCase()+'</div>'+
+            '<div style="font-size:12px;color:#888;margin-bottom:7px;">Bags In Hole <span style="color:'+cA.s+';font-weight:700;">(3 pts)</span></div>'+
+            '<div style="display:flex;gap:8px;margin-bottom:12px;">'+bagRow("a","hole",cA.s)+'</div>'+
+            '<div style="font-size:12px;color:#888;margin-bottom:7px;">Bags On Board <span style="color:'+cA.s+';font-weight:700;">(1 pt)</span></div>'+
+            '<div style="display:flex;gap:8px;">'+bagRow("a","board",cA.s)+'</div>'+
+          '</div>'+
+          '<div style="background:'+cA.s+'18;border-radius:14px;padding:14px 10px;border:1px solid '+cA.s+'33;text-align:center;margin-top:32px;flex-shrink:0;">'+
+            flipHTML(m.rawA,cA.s,48,"modal-ra")+
+            '<div style="font-size:9px;color:'+cA.s+';opacity:.6;letter-spacing:2px;margin-top:4px;">BRUT</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="height:1px;background:#222;margin:0 0 14px;"></div>'+
+        // Team B / Ghost
+        (!c.ghostMode?
+          '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">'+
+            '<div style="flex:1;">'+
+              '<div style="font-size:20px;font-weight:900;color:'+cB.s+';letter-spacing:2px;margin-bottom:10px;text-align:center;">'+c.teamB.name.toUpperCase()+'</div>'+
+              '<div style="font-size:12px;color:#888;margin-bottom:7px;">Bags In Hole <span style="color:'+cB.s+';font-weight:700;">(3 pts)</span></div>'+
+              '<div style="display:flex;gap:8px;margin-bottom:12px;">'+bagRow("b","hole",cB.s)+'</div>'+
+              '<div style="font-size:12px;color:#888;margin-bottom:7px;">Bags On Board <span style="color:'+cB.s+';font-weight:700;">(1 pt)</span></div>'+
+              '<div style="display:flex;gap:8px;">'+bagRow("b","board",cB.s)+'</div>'+
+            '</div>'+
+            '<div style="background:'+cB.s+'18;border-radius:14px;padding:14px 10px;border:1px solid '+cB.s+'33;text-align:center;margin-top:32px;flex-shrink:0;">'+
+              flipHTML(m.rawB,cB.s,48,"modal-rb")+
+              '<div style="font-size:9px;color:'+cB.s+';opacity:.6;letter-spacing:2px;margin-top:4px;">BRUT</div>'+
+            '</div>'+
+          '</div>'
+          :'<div style="background:#111;border-radius:13px;padding:13px;margin-bottom:14px;border:1px solid #222;text-align:center;"><div style="font-size:13px;color:#555;">👻 Ghost: '+ghost.min+'–'+ghost.max+' pts</div></div>')+
+        // Résultat cancellation
+        '<div style="background:#0d1a0d;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #1a2e1a;">'+
+          '<div style="font-size:10px;color:#2e7d32;letter-spacing:2px;margin-bottom:8px;font-weight:700;">RÉSULTAT MANCHE (CANCELLATION)</div>'+
+          '<div style="display:flex;justify-content:center;align-items:center;gap:20px;">'+
+            '<div style="text-align:center;"><div style="font-size:10px;color:'+cA.s+';opacity:.7;margin-bottom:4px;">'+c.teamA.name.slice(0,8).toUpperCase()+'</div>'+flipHTML(m.ptsA,cA.s,52,"modal-a")+'</div>'+
+            '<div style="font-size:20px;color:#2a2a2a;font-weight:900;">|</div>'+
+            '<div style="text-align:center;"><div style="font-size:10px;color:'+(c.ghostMode?"#555":cB.s)+';opacity:.7;margin-bottom:4px;">'+(c.ghostMode?"GHOST":c.teamB.name.slice(0,8).toUpperCase())+'</div>'+flipHTML(m.ptsB,c.ghostMode?"#555":cB.s,52,"modal-b")+'</div>'+
+          '</div>'+
+          ((m.rawA>0||m.rawB>0)?'<div style="text-align:center;font-size:10px;color:#333;margin-top:6px;">brut: '+m.rawA+' – '+m.rawB+'</div>':"")+
+        '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:8px;">'+
+          '<button onclick="skSaveRound()" style="width:100%;padding:15px;border-radius:14px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">✓ Save Round</button>'+
+          '<button onclick="skCloseScore()" style="width:100%;padding:11px;border-radius:11px;background:transparent;border:none;color:#555;font-size:15px;font-weight:700;cursor:pointer;">Cancel</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+  return html;
 }
 
-function renderSKScoreModal(){
-  const c=sk.cfg,g=sk.game;
-  const cA=COLORS[c.teamA.colorIdx],cB=COLORS[c.teamB.colorIdx];
-  const prev=calcPts(g.entry,c.cancellation);
-  const ghost=GHOST_PRESET();
-  const bagBtns=(key,type,color)=>[1,2,3,4].map(n=>`<button onclick="setSKEntry('${key}','${type}',${n})" style="width:46px;height:46px;border-radius:50%;background:${g.entry[key][type]===n?color:"#2a2a2a"};border:2px solid ${g.entry[key][type]===n?color:"#3a3a3a"};color:#fff;font-weight:800;font-size:18px;cursor:pointer;box-shadow:${g.entry[key][type]===n?`0 4px 12px ${color}66`:"none"};transform:${g.entry[key][type]===n?"scale(1.12)":"scale(1)"};transition:all .15s;">${n}</button>`).join("");
-  const flipScore=(val,color,id)=>`<div style="margin-top:32px;">${flipScoreHTML(val,color,"PTS",id,56)}</div>`;
-  return`<div style="position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);">
-    <div style="background:#111;border-radius:18px;padding:22px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,.8);border:1px solid #2a2a2a;max-height:90vh;overflow-y:auto;">
-      <div style="background:#1e1e1e;border-radius:10px 10px 0 0;margin:-22px -22px 16px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:18px;font-weight:900;letter-spacing:2px;text-transform:uppercase;">ENTER SCORES</div>
-        <div style="background:#fff;border-radius:20px;padding:4px 14px;font-size:14px;font-weight:900;color:#000;">Round: ${g.round}</div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">
-        <div style="flex:1;">
-          <div style="font-size:20px;font-weight:900;color:${cA.s};letter-spacing:2px;margin-bottom:10px;text-align:center;">${c.teamA.name.toUpperCase()}</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:${cA.s};font-weight:700;">(3 Points)</span></div>
-          <div style="display:flex;gap:8px;margin-bottom:12px;">${bagBtns("a","hole",cA.s)}</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:${cA.s};font-weight:700;">(1 Point)</span></div>
-          <div style="display:flex;gap:8px;">${bagBtns("a","board",cA.s)}</div>
-        </div>
-        ${flipScore(prev.a,cA.s,"modal-a")}
-      </div>
-      <div style="height:1px;background:#222;margin:0 -22px 14px;"></div>
-      ${!c.ghostMode?`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">
-        <div style="flex:1;">
-          <div style="font-size:20px;font-weight:900;color:${cB.s};letter-spacing:2px;margin-bottom:10px;text-align:center;">${c.teamB.name.toUpperCase()}</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags In Hole <span style="color:${cB.s};font-weight:700;">(3 Points)</span></div>
-          <div style="display:flex;gap:8px;margin-bottom:12px;">${bagBtns("b","hole",cB.s)}</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:7px;">Bags On Board <span style="color:${cB.s};font-weight:700;">(1 Point)</span></div>
-          <div style="display:flex;gap:8px;">${bagBtns("b","board",cB.s)}</div>
-        </div>
-        ${flipScore(prev.b,cB.s,"modal-b")}
-      </div>`:`<div style="background:#111;border-radius:13px;padding:13px;margin-bottom:14px;border:1px solid #222;text-align:center;"><div style="font-size:12px;color:#555;">👻 Ghost score entre ${ghost.min} et ${ghost.max} pts</div></div>`}
-      ${c.cancellation&&(g.entry.a.hole+g.entry.a.board+g.entry.b.hole+g.entry.b.board)>0?`<div style="background:#0d0d0d;border-radius:10px;padding:8px 12px;margin-bottom:12px;border:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:11px;color:#555;">ACL Cancellation</div><div style="font-size:13px;font-weight:700;"><span style="color:${cA.s};">+${prev.a}</span><span style="color:#333;margin:0 6px;">|</span><span style="color:${cB.s};">+${prev.b}</span><span style="font-size:10px;color:#444;margin-left:6px;">(brut: ${g.entry.a.hole*3+g.entry.a.board}–${g.entry.b.hole*3+g.entry.b.board})</span></div></div>`:""}
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <button onclick="skSaveRound()" style="width:100%;padding:15px 0;border-radius:14px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">Save Round</button>
-        <button onclick="skCloseScore()" style="width:100%;padding:11px 0;border-radius:11px;background:transparent;border:none;color:#666;font-size:15px;font-weight:700;cursor:pointer;">Cancel</button>
-      </div>
-    </div>
-  </div>`;
+function renderSKStatsModal() {
+  var c=sk.cfg, g=sk.game, h=g.history;
+  var cA=COLORS[c.teamA.colorIdx], cB=COLORS[c.teamB.colorIdx];
+  var totA=h.reduce(function(s,x){return s+x.raw.a;},0);
+  var totB=h.reduce(function(s,x){return s+x.raw.b;},0);
+  var avgA=h.length?(g.scores.a/h.length).toFixed(1):"0.0";
+  var avgB=h.length?(g.scores.b/h.length).toFixed(1):"0.0";
+  function statRow(label,a,b){
+    var tot=(Number(a)+Number(b))||1, pct=Math.round(Number(a)/tot*100);
+    return '<div style="background:#1a1a1a;border-radius:11px;padding:9px 13px;margin-bottom:7px;border:1px solid #222;">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;font-weight:700;"><span style="color:'+cA.s+';">'+a+'</span><span style="color:#555;font-size:11px;letter-spacing:1px;">'+label+'</span><span style="color:'+cB.s+';">'+b+'</span></div>'+
+      '<div style="display:flex;border-radius:5px;overflow:hidden;height:6px;"><div style="width:'+pct+'%;background:'+cA.s+';"></div><div style="width:'+(100-pct)+'%;background:'+cB.s+';"></div></div>'+
+    '</div>';
+  }
+  return '<div style="position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);">'+
+    '<div style="background:#111;border-radius:18px;padding:22px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,.8);border:1px solid #2a2a2a;max-height:90vh;overflow-y:auto;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div style="font-size:19px;font-weight:900;">Statistiques</div><div style="font-size:13px;color:#555;">'+h.length+' manches</div></div>'+
+      '<div style="display:flex;justify-content:center;gap:20px;margin-bottom:14px;">'+
+        '<div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:'+cA.s+';">'+g.scores.a+'</div><div style="font-size:11px;color:#555;">'+c.teamA.name+'</div></div>'+
+        '<div style="font-size:24px;color:#333;font-weight:900;align-self:center;">–</div>'+
+        '<div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:'+cB.s+';">'+g.scores.b+'</div><div style="font-size:11px;color:#555;">'+c.teamB.name+'</div></div>'+
+      '</div>'+
+      statRow("Pts bruts totaux",totA,totB)+
+      statRow("Moy. pts/manche",avgA,avgB)+
+      '<button onclick="skCloseStats()" style="width:100%;padding:12px;border-radius:11px;margin-top:6px;background:#1a1a1a;border:1px solid #333;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Fermer</button>'+
+    '</div></div>';
 }
 
-function renderSKStatsModal(){
-  const c=sk.cfg,g=sk.game,h=g.history;
-  const cA=COLORS[c.teamA.colorIdx],cB=COLORS[c.teamB.colorIdx];
-  const hA=h.reduce((a,x)=>a+x.entry.a.hole,0),hB=h.reduce((a,x)=>a+x.entry.b.hole,0);
-  const bA=h.reduce((a,x)=>a+x.entry.a.board,0),bB=h.reduce((a,x)=>a+x.entry.b.board,0);
-  const rp=h.length;
-  return`<div style="position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;backdrop-filter:blur(4px);">
-    <div style="background:#111;border-radius:18px;padding:22px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,.8);border:1px solid #2a2a2a;max-height:90vh;overflow-y:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:19px;font-weight:900;letter-spacing:1px;">Statistiques</div>
-        <div style="background:#1a1a1a;border:1px solid #333;border-radius:7px;padding:3px 9px;font-size:12px;color:#aaa;">Rounds: <span style="color:#fff;font-weight:800;">${rp}</span></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
-        <div style="font-size:34px;font-weight:900;color:${cA.s};">${g.scores.a}</div>
-        <div style="font-size:34px;font-weight:900;color:${cB.s};">${g.scores.b}</div>
-      </div>
-      ${[["Bags In Hole",hA,hB],["Bags On Board",bA,bB],["Overall Bags",hA+bA,hB+bB],["Avg PPR",rp?(g.scores.a/rp).toFixed(2):"0.00",rp?(g.scores.b/rp).toFixed(2):"0.00"]].map(([lbl,a,b])=>{
-        const tot=(Number(a)+Number(b))||1,pct=Math.round(Number(a)/tot*100);
-        return`<div style="background:#1a1a1a;border-radius:11px;padding:9px 13px;margin-bottom:7px;border:1px solid #222;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;font-weight:700;"><span style="color:${cA.s};">${a}</span><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${lbl}</span><span style="color:${cB.s};">${b}</span></div>
-          <div style="display:flex;border-radius:5px;overflow:hidden;height:6px;"><div style="width:${pct}%;background:${cA.s};transition:width .4s;"></div><div style="width:${100-pct}%;background:${cB.s};"></div></div>
-        </div>`;
-      }).join("")}
-      <button onclick="skCloseStats()" style="width:100%;padding:12px 0;border-radius:11px;margin-top:5px;background:#1a1a1a;border:1px solid #333;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Fermer</button>
-    </div>
-  </div>`;
+function renderSKWinner() {
+  var c=sk.cfg, g=sk.game;
+  var name=g.winner==="a"?c.teamA.name:c.teamB.name;
+  var col=g.winner==="a"?COLORS[c.teamA.colorIdx]:COLORS[c.teamB.colorIdx];
+  var cA=COLORS[c.teamA.colorIdx], cB=COLORS[c.teamB.colorIdx];
+  return '<div style="position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9);backdrop-filter:blur(6px);padding:16px;">'+
+    '<div style="background:#111;border-radius:24px;padding:28px 22px;width:100%;max-width:400px;text-align:center;border:2px solid '+col.s+'44;animation:winner-in .45s cubic-bezier(.34,1.56,.64,1);">'+
+      '<div style="font-size:68px;animation:trophy-bounce 1.5s ease-in-out .3s infinite;display:inline-block;margin-bottom:4px;">🏆</div>'+
+      '<div style="font-size:10px;letter-spacing:4px;color:#555;margin-bottom:4px;">WINNER</div>'+
+      '<div style="font-size:46px;font-weight:900;color:'+col.s+';letter-spacing:2px;text-shadow:0 0 40px '+col.s+'66;line-height:1;margin-bottom:14px;">'+name+'</div>'+
+      '<div style="display:flex;justify-content:center;gap:16px;margin-bottom:20px;">'+
+        '<div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:'+cA.s+';">'+g.scores.a+'</div><div style="font-size:10px;color:#555;">'+c.teamA.name+'</div></div>'+
+        '<div style="font-size:22px;color:#333;font-weight:900;align-self:center;">–</div>'+
+        '<div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:'+cB.s+';">'+g.scores.b+'</div><div style="font-size:10px;color:#555;">'+c.teamB.name+'</div></div>'+
+      '</div>'+
+      (tournoiId?'<a href="cornhole-classement.html?t='+tournoiId+'" target="_blank" style="display:block;width:100%;padding:13px;border-radius:12px;margin-bottom:8px;background:linear-gradient(135deg,#f4a100,#f77f00);color:#000;font-size:16px;font-weight:900;text-decoration:none;letter-spacing:1px;">🏆 Voir le Classement</a>':"")+
+      '<button onclick="skUndo()" style="width:100%;padding:11px;border-radius:11px;margin-bottom:8px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">↩ Annuler dernier round</button>'+
+      '<button onclick="skReset()" style="width:100%;padding:13px;border-radius:13px;margin-bottom:8px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;">🎮 Nouvelle Partie</button>'+
+      '<button onclick="renderSKSetup()" style="width:100%;padding:11px;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">◀ Menu</button>'+
+    '</div></div>';
 }
 
-function renderSKWinner(){
-  const g=sk.game,c=sk.cfg;
-  const name=g.winner==="a"?c.teamA.name:c.teamB.name;
-  const col=g.winner==="a"?COLORS[c.teamA.colorIdx]:COLORS[c.teamB.colorIdx];
-  const cc=col.s;
-  return`<div style="position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.88);backdrop-filter:blur(6px);padding:16px;">
-    <div id="sk-winner-box" style="background:#111;border-radius:24px;padding:28px 22px;width:100%;max-width:400px;text-align:center;border:2px solid ${cc}44;position:relative;overflow:hidden;z-index:10;animation:wi .45s cubic-bezier(.34,1.56,.64,1) forwards;">
-      <div style="position:absolute;inset:0;background:${col.bg};opacity:.09;"></div>
-      <div style="font-size:68px;animation:tb 1.5s ease-in-out .3s infinite;display:inline-block;margin-bottom:4px;">🏆</div>
-      <div style="font-size:10px;letter-spacing:4px;color:#555;text-transform:uppercase;margin-bottom:4px;">WINNER</div>
-      <div style="font-size:46px;font-weight:900;color:${cc};letter-spacing:2px;text-shadow:0 0 40px ${cc}77;animation:tsh .6s ease-in-out;line-height:1;margin-bottom:12px;">${name}</div>
-      <div style="display:flex;justify-content:center;gap:16px;margin-bottom:18px;">
-        <div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:#e63946;">${g.scores.a}</div><div style="font-size:9px;color:#e63946;opacity:.6;letter-spacing:2px;">${c.teamA.name.toUpperCase().slice(0,10)}</div></div>
-        <div style="font-size:24px;color:#333;font-weight:900;align-self:center;">–</div>
-        <div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:#1d6fa4;">${g.scores.b}</div><div style="font-size:9px;color:#1d6fa4;opacity:.6;letter-spacing:2px;">${c.teamB.name.toUpperCase().slice(0,10)}</div></div>
-      </div>
-      <button onclick="skUndo()" style="width:100%;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">↩ Undo Last Round</button>
-      <button onclick="skReset()" style="width:100%;padding:13px 0;border-radius:13px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;box-shadow:0 6px 24px rgba(244,161,0,.4);margin-bottom:8px;">🎮 Nouvelle Partie</button>
-      <button onclick="renderSKSetup()" style="width:100%;padding:11px 0;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">◀ Retour au Menu</button>
-    </div>
-  </div>`;
+function renderSKTie() {
+  var g=sk.game;
+  return '<div style="position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9);backdrop-filter:blur(6px);padding:16px;">'+
+    '<div style="background:#111;border-radius:24px;padding:28px 22px;width:100%;max-width:400px;text-align:center;border:1px solid #2a2a2a;">'+
+      '<div style="font-size:52px;margin-bottom:8px;">🤝</div>'+
+      '<div style="font-size:32px;font-weight:900;margin-bottom:6px;">ÉGALITÉ !</div>'+
+      '<div style="font-size:22px;color:#aaa;margin-bottom:20px;">'+g.scores.a+' – '+g.scores.b+'</div>'+
+      '<button onclick="skUndo()" style="width:100%;padding:12px;border-radius:11px;margin-bottom:9px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">↩ Annuler dernier round</button>'+
+      '<button onclick="skReset()" style="width:100%;padding:13px;border-radius:13px;margin-bottom:9px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:17px;font-weight:900;cursor:pointer;">🎮 Nouvelle Partie</button>'+
+      '<button onclick="renderSKSetup()" style="width:100%;padding:12px;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">◀ Menu</button>'+
+    '</div></div>';
 }
 
-function renderSKTie(){
-  return`<div style="position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.88);backdrop-filter:blur(6px);padding:16px;">
-    <div style="background:#111;border-radius:24px;padding:28px 22px;width:100%;max-width:400px;text-align:center;border:1px solid #2a2a2a;">
-      <div style="font-size:52px;margin-bottom:8px;">🤝</div>
-      <div style="font-size:32px;font-weight:900;letter-spacing:2px;margin-bottom:16px;">ÉGALITÉ !</div>
-      <div style="font-size:22px;color:#aaa;margin-bottom:20px;">${sk.game.scores.a} – ${sk.game.scores.b}</div>
-      <button onclick="skUndo()" style="width:100%;padding:12px 0;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:9px;">↩ Undo Last Round</button>
-      <button onclick="skReset()" style="width:100%;padding:13px 0;border-radius:13px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:17px;font-weight:900;cursor:pointer;letter-spacing:1px;margin-bottom:9px;">🎮 Nouvelle Partie</button>
-      <button onclick="renderSKSetup()" style="width:100%;padding:12px 0;border-radius:11px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:14px;font-weight:700;cursor:pointer;">◀ Retour au Menu</button>
-    </div>
-  </div>`;
-}
-
-window.setSKEntry=(key,type,val)=>{
+window.setSKEntry = function(key,type,val){
   sk.game.entry[key][type]=sk.game.entry[key][type]===val?0:val;
   renderSKGame();
+  var m=calcManche(sk.game.entry.a,sk.game.entry.b);
+  setTimeout(function(){ flipTo("modal-ra",m.rawA); flipTo("modal-rb",m.rawB); flipTo("modal-a",m.ptsA); flipTo("modal-b",m.ptsB); },20);
 };
-window.skOpenScore=()=>{sk.showScore=true;renderSKGame();};
-window.skCloseScore=()=>{sk.showScore=false;sk.game.entry={a:{hole:0,board:0},b:{hole:0,board:0}};renderSKGame();};
-window.skShowStats=()=>{sk.showStats=true;renderSKGame();};
-window.skCloseStats=()=>{sk.showStats=false;renderSKGame();};
-window.skUndo=()=>{if(!sk.game.history.length)return;const l=sk.game.history[sk.game.history.length-1];sk.game.scores=l.before;sk.game.round=l.round;sk.game.history=sk.game.history.slice(0,-1);sk.game.winner=null;renderSKGame();};
-window.skReset=()=>{sk.game={scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};sk.showScore=false;renderSKGame();};
-window.skSaveRound=()=>{
-  const c=sk.cfg,g=sk.game;
-  const pts=calcPts(g.entry,c.cancellation);
-  const ghost=GHOST_PRESET();
-  let gPts=0;
-  if(c.ghostMode){gPts=Math.floor(Math.random()*(ghost.max-ghost.min+1))+ghost.min;gPts=Math.min(gPts,12);}
-  let nA=g.scores.a+pts.a,nB=c.ghostMode?g.scores.b+gPts:g.scores.b+pts.b;
-  if(c.gameMode==="bust"){if(nA>c.winScore)nA=15;if(nB>c.winScore)nB=15;}
-  const hist=[...g.history,{round:g.round,entry:{...g.entry},pts:{a:pts.a,b:c.ghostMode?gPts:pts.b},before:{...g.scores}}];
-  const nRound=g.round+1;
-  let winner=null;
-  if(c.useWinScore){if(nA>=c.winScore&&nA>nB)winner="a";else if(nB>=c.winScore&&nB>nA)winner="b";else if(nA>=c.winScore&&nB>=c.winScore)winner=nA>=nB?"a":"b";}
-  if(!winner&&c.useMaxRounds&&nRound>c.maxRounds+1){if(nA>nB)winner="a";else if(nB>nA)winner="b";else winner="tie";}
-  sk.game={...g,scores:{a:nA,b:nB},round:nRound,history:hist,winner,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};
-  sk.showScore=false;
-  if(winner&&winner!=="tie"){sk.allGames.push({date:new Date().toLocaleDateString("fr-FR"),nA:c.teamA.name,nB:c.teamB.name,sA:nA,sB:nB,winner:winner==="a"?c.teamA.name:c.teamB.name,rounds:hist.length});}
-  renderSKGame();
-  // Animer les scores via flip
-  setTimeout(()=>{
-    if(pts.a>0||c.ghostMode) flipTo("sk-a", nA);
-    if(pts.b>0||c.ghostMode) flipTo("sk-b", nB);
-  }, 30);
+window.skOpenScore  = function(){sk.showScore=true; renderSKGame();};
+window.skCloseScore = function(){sk.showScore=false; sk.game.entry={a:{hole:0,board:0},b:{hole:0,board:0}}; renderSKGame();};
+window.skStats      = function(){sk.showStats=true; renderSKGame();};
+window.skCloseStats = function(){sk.showStats=false; renderSKGame();};
+window.skUndo = function(){
+  if(!sk.game.history.length)return;
+  var last=sk.game.history[sk.game.history.length-1];
+  sk.game.scores={a:last.before.a,b:last.before.b};
+  sk.game.round=last.round;
+  sk.game.history=sk.game.history.slice(0,-1);
+  sk.game.winner=null; renderSKGame();
+};
+window.skReset = function(){
+  sk.game={scores:{a:0,b:0},round:1,history:[],winner:null,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};
+  sk.showScore=false; renderSKGame();
+};
+window.skSaveRound = function(){
+  var c=sk.cfg, g=sk.game;
+  var m=calcManche(g.entry.a,g.entry.b);
+  var ghost=GHOST[c.ghostDiff];
+  var gPts=c.ghostMode?Math.floor(Math.random()*(ghost.max-ghost.min+1))+ghost.min:m.ptsB;
+  var nA=g.scores.a+m.ptsA, nB=g.scores.b+(c.ghostMode?gPts:m.ptsB);
+  if(c.gameMode==="bust"){if(nA>c.winScore)nA=15; if(nB>c.winScore)nB=15;}
+  var hist=g.history.concat([{round:g.round,entry:JSON.parse(JSON.stringify(g.entry)),pts:{a:m.ptsA,b:c.ghostMode?gPts:m.ptsB},raw:{a:m.rawA,b:m.rawB},before:{a:g.scores.a,b:g.scores.b}}]);
+  var nR=g.round+1, winner=null;
+  if(c.useWinScore){
+    if(nA>=c.winScore&&nA>nB)winner="a";
+    else if(nB>=c.winScore&&nB>nA)winner="b";
+    else if(nA>=c.winScore&&nB>=c.winScore)winner=nA>=nB?"a":"b";
+  }
+  if(!winner&&c.useMaxRounds&&nR>c.maxRounds){
+    if(nA>nB)winner="a"; else if(nB>nA)winner="b"; else winner="tie";
+  }
+  sk.game={scores:{a:nA,b:nB},round:nR,history:hist,winner:winner,entry:{a:{hole:0,board:0},b:{hole:0,board:0}}};
+  sk.showScore=false; renderSKGame();
+  setTimeout(function(){flipTo("sk-a",nA); flipTo("sk-b",nB);},30);
 };
 
-// ════════════════════════════════════════
-// TOURNOI FIREBASE
-// ════════════════════════════════════════
-function renderSetupTournoi(){
-  $("root").innerHTML=`
-    <div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-      ${backBtn("renderHome")}
-      <div><div style="font-size:10px;letter-spacing:3px;color:#555;">MODE</div><div style="font-size:22px;font-weight:900;">TOURNOI LIVE</div></div>
-    </div>
-    <div style="padding:0 18px;">
-      <div style="background:#111;border-radius:14px;padding:18px;border:1px solid #1e1e1e;">
-        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU TOURNOI</div>
-        <input id="tNom" placeholder="Nom du tournoi" style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:12px;color:#fff;font-size:17px;font-weight:700;box-sizing:border-box;margin-bottom:12px;"/>
-        <button onclick="creerTournoi()" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">🏆 Créer le Tournoi</button>
-      </div>
-    </div>`;
+// === TOURNOI ===
+function renderSetupTournoi() {
+  $("root").innerHTML=
+    '<div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:18px;">'+backBtn("renderHome")+
+    '<div><div style="font-size:10px;letter-spacing:3px;color:#555;">TOURNOI</div><div style="font-size:22px;font-weight:900;">NOUVEAU TOURNOI</div></div></div>'+
+    '<div style="padding:0 18px;">'+
+      '<div style="background:#111;border-radius:14px;padding:18px;border:1px solid #1e1e1e;">'+
+        '<div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">CONFIGURATION</div>'+
+        '<input id="tNom" placeholder="Nom du tournoi" style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:9px;padding:12px;color:#fff;font-size:17px;font-weight:700;margin-bottom:10px;"/>'+
+        '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+          '<select id="tPPT" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:14px;">'+
+            '<option value="1">1v1 — Solo</option><option value="2">2v2 — Duo</option>'+
+          '</select>'+
+          '<select id="tTerrains" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:14px;">'+
+            [1,2,3,4,5,6,7,8].map(function(n){return '<option value="'+n+'">'+n+' terrain'+(n>1?"s":"")+'</option>';}).join('')+
+          '</select>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+          '<select id="tWin" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:14px;">'+
+            '<option value="21">21 pts</option><option value="15">15 pts</option><option value="11">11 pts</option>'+
+          '</select>'+
+          '<select id="tMaxR" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:14px;">'+
+            '<option value="">Sans limite</option>'+
+            [6,8,10,12,14,16].map(function(r){return '<option value="'+r+'">'+r+' manches</option>';}).join('')+
+          '</select>'+
+        '</div>'+
+        '<div style="background:#0d1a0d;border-radius:10px;padding:10px 12px;margin-bottom:12px;border:1px solid #1a2e1a;">'+
+          '<div style="font-size:11px;color:#2e7d32;font-weight:700;margin-bottom:3px;">📋 ACL Cancellation Scoring</div>'+
+          '<div style="font-size:11px;color:#555;">Seule la différence de points compte par manche</div>'+
+        '</div>'+
+        '<button onclick="creerTournoi()" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:18px;font-weight:900;cursor:pointer;letter-spacing:1px;">🏆 Créer le Tournoi</button>'+
+      '</div>'+
+    '</div>';
 }
 
-window.creerTournoi=async()=>{
-  const nom=$("tNom").value.trim()||"Tournoi Cornhole";
-  const id=uid();
-  await set(ref(db,`tournois/${id}`),{nom,format:"tournoi",cree:Date.now(),statut:"en_cours",matchs:{}});
-  tournoiId=id;localStorage.setItem("cornhole_admin_id",id);loadTournoi();
+window.creerTournoi = function() {
+  var nom=($("tNom")&&$("tNom").value.trim())||"Tournoi Cornhole";
+  var ppt=parseInt(($("tPPT")&&$("tPPT").value)||1);
+  var nT=parseInt(($("tTerrains")&&$("tTerrains").value)||2);
+  var win=parseInt(($("tWin")&&$("tWin").value)||21);
+  var maxR=parseInt(($("tMaxR")&&$("tMaxR").value)||"")||null;
+  var id=uid();
+  db.ref("tournois/"+id).set({nom:nom,ppt:ppt,nTerrains:nT,winScore:win,maxRounds:maxR,cree:Date.now(),statut:"en_cours",equipes:{},matchs:{}});
+  tournoiId=id; localStorage.setItem("cornhole_admin_id",id); loadTournoi();
 };
 
-function loadTournoi(){
-  onValue(ref(db,`tournois/${tournoiId}`),snap=>{
+function loadTournoi() {
+  db.ref("tournois/"+tournoiId).on("value",function(snap){
     if(!snap.exists()){tournoiId=null;localStorage.removeItem("cornhole_admin_id");renderHome();return;}
-    tournoi=snap.val();renderTournoi();
-    // Animer les scores Firebase via flip
-    if(tournoi.matchs){
-      Object.entries(tournoi.matchs).forEach(([id,m])=>{
-        setTimeout(()=>{
-          flipTo(`t-${id}-a`, m.scoreA||0);
-          flipTo(`t-${id}-b`, m.scoreB||0);
-        }, 50);
-      });
-    }
+    tournoi=snap.val(); renderTournoi();
   });
 }
 
-function renderTournoi(){
-  const matchs=tournoi.matchs?Object.entries(tournoi.matchs):[];
-  const enCours=matchs.filter(([,m])=>m.statut!=="termine");
-  const termines=matchs.filter(([,m])=>m.statut==="termine");
-  $("root").innerHTML=`
-    <div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      ${backBtn("renderHome")}
-      <div style="flex:1;"><div style="font-size:10px;letter-spacing:2px;color:#f4a100;">TOURNOI EN COURS</div><div style="font-size:20px;font-weight:900;">${tournoi.nom}</div></div>
-    </div>
-    <div style="padding:0 18px;">
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
-        <a href="cornhole-scoreboard.html?t=${tournoiId}" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;"><div style="font-size:18px;">📺</div><div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">SCOREBOARD</div></a>
-        <a href="cornhole-classement.html?t=${tournoiId}" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;"><div style="font-size:18px;">🏆</div><div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">CLASSEMENT</div></a>
-        <div onclick="nouveauTournoi()" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:18px;">➕</div><div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">NOUVEAU</div></div>
-        <div onclick="supprimerTournoi()" style="flex:1;background:#1a1a1a;border:1px solid #e6394622;border-radius:11px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:18px;">🗑</div><div style="font-size:11px;color:#e63946;font-weight:700;letter-spacing:1px;">SUPPRIMER</div></div>
-      </div>
-      <div style="background:#111;border-radius:14px;padding:16px;border:1px solid #1e1e1e;margin-bottom:14px;">
-        <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU MATCH</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <input id="tNomA" placeholder="Équipe A" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:14px;font-weight:700;"/>
-          <input id="tNomB" placeholder="Équipe B" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#fff;font-size:14px;font-weight:700;"/>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <select id="tTerrain" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:13px;"><option value="">Terrain (optionnel)</option>${[1,2,3,4,5,6,7,8].map(n=>`<option>Terrain ${n}</option>`).join("")}</select>
-          <select id="tWin" style="flex:1;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:10px;color:#aaa;font-size:13px;"><option value="21">21 pts</option><option value="15">15 pts</option><option value="11">11 pts</option></select>
-        </div>
-        <button onclick="ajouterMatchTournoi()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:16px;font-weight:900;cursor:pointer;letter-spacing:1px;">+ Créer le Match & QR Codes</button>
-      </div>
-      <div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">EN COURS (${enCours.length})</div>
-      ${enCours.length===0?`<div style="text-align:center;color:#2a2a2a;padding:20px;font-size:14px;">Aucun match en cours</div>`:""}
-      <div id="matchs-tournoi">${enCours.map(([id,m])=>renderCarteTournoi(id,m)).join("")}</div>
-      ${termines.length?`<div style="margin-top:14px;"><div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:8px;">TERMINÉS (${termines.length})</div>${termines.map(([id,m])=>`<div style="background:#0d0d0d;border-radius:11px;padding:12px;margin-bottom:8px;border:1px solid #151515;opacity:.75;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:14px;font-weight:700;">${m.equipeA} vs ${m.equipeB}</div><div style="font-size:11px;color:#f4a100;margin-top:2px;">🏆 ${(m.scoreA||0)>=(m.winScore||21)?m.equipeA:m.equipeB}</div></div><div><span style="font-size:22px;font-weight:900;color:#e63946;">${m.scoreA||0}</span><span style="color:#333;margin:0 4px;">–</span><span style="font-size:22px;font-weight:900;color:#1d6fa4;">${m.scoreB||0}</span></div></div></div>`).join("")}</div>`:""}
-    </div>`;
-  enCours.forEach(([id])=>{genQR(`qr-a-${id}`,`${baseUrl()}cornhole-equipe.html?t=${tournoiId}&m=${id}&e=a`);genQR(`qr-b-${id}`,`${baseUrl()}cornhole-equipe.html?t=${tournoiId}&m=${id}&e=b`);});
+function renderTournoi() {
+  var t=tournoi;
+  var equipes=Object.entries(t.equipes||{});
+  var matchs=Object.entries(t.matchs||{});
+  var prevus=matchs.filter(function(e){return e[1].statut==="prevu";});
+  var enCours=matchs.filter(function(e){return e[1].statut==="en_cours";});
+  var termines=matchs.filter(function(e){return e[1].statut==="termine";});
+  var qrUrl=baseUrl()+"cornhole-terrain.html?t="+tournoiId;
+  var eqMap=Object.fromEntries(equipes);
+
+  var html=
+    '<div style="padding:18px 18px 0;display:flex;align-items:center;gap:10px;margin-bottom:14px;">'+backBtn("renderHome")+
+    '<div style="flex:1;"><div style="font-size:10px;letter-spacing:2px;color:#f4a100;">TOURNOI EN COURS</div>'+
+    '<div style="font-size:20px;font-weight:900;">'+t.nom+'</div>'+
+    '<div style="font-size:11px;color:#555;margin-top:1px;">'+t.ppt+'v'+t.ppt+' · '+t.nTerrains+' terrain'+(t.nTerrains>1?"s":"")+' · '+t.winScore+'pts'+(t.maxRounds?" · "+t.maxRounds+" manches":"")+'</div></div></div>'+
+    '<div style="padding:0 18px;">';
+
+  // QR unique
+  html+='<div style="background:#111;border-radius:14px;padding:14px;border:1px solid #1e1e1e;margin-bottom:14px;">'+
+    '<div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">QR CODE TOURNOI — À IMPRIMER</div>'+
+    '<div style="display:flex;gap:12px;align-items:center;">'+
+      '<div id="qr-t" style="flex-shrink:0;background:#fff;padding:6px;border-radius:8px;"></div>'+
+      '<div style="flex:1;"><div style="font-size:13px;color:#aaa;margin-bottom:6px;line-height:1.4;">Un seul QR pour tous les joueurs. Ils voient les matchs et choisissent leur équipe.</div>'+
+      '<div style="font-size:10px;color:#333;word-break:break-all;">'+qrUrl+'</div></div>'+
+    '</div></div>';
+
+  // TV + Supprimer
+  html+='<div style="display:flex;gap:8px;margin-bottom:14px;">'+
+    '<a href="cornhole-scoreboard.html?t='+tournoiId+'" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;"><div style="font-size:18px;">📺</div><div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">SCOREBOARD</div></a>'+
+    '<a href="cornhole-classement.html?t='+tournoiId+'" target="_blank" style="flex:1;display:block;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:11px;padding:10px;text-align:center;text-decoration:none;"><div style="font-size:18px;">🏆</div><div style="font-size:11px;color:#aaa;font-weight:700;letter-spacing:1px;">CLASSEMENT</div></a>'+
+    '<div onclick="supprimerTournoi()" style="flex:1;background:#1a1a1a;border:1px solid #e6394622;border-radius:11px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:18px;">🗑</div><div style="font-size:11px;color:#e63946;font-weight:700;letter-spacing:1px;">SUPPRIMER</div></div>'+
+  '</div>';
+
+  // Équipes
+  html+='<div style="background:#111;border-radius:14px;padding:14px;border:1px solid #1e1e1e;margin-bottom:14px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+      '<div style="font-size:10px;letter-spacing:2px;color:#555;">ÉQUIPES ('+equipes.length+')</div>'+
+      '<button onclick="showAddEq()" style="padding:5px 12px;border-radius:8px;background:#f4a100;border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer;">+ Ajouter</button>'+
+    '</div>'+
+    (equipes.length===0?'<div style="text-align:center;color:#2a2a2a;padding:14px;font-size:13px;">Aucune équipe</div>':"")+
+    equipes.map(function(e){
+      var eq=e[1];
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a;">'+
+        (eq.photo?'<img src="'+eq.photo+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>'
+          :'<div style="width:36px;height:36px;border-radius:8px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👥</div>')+
+        '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">'+eq.nom+'</div>'+
+        (eq.joueurs&&eq.joueurs.filter(function(j){return j;}).length?'<div style="font-size:11px;color:#555;">'+eq.joueurs.filter(function(j){return j;}).join(" · ")+'</div>':"")+
+        '</div>'+
+        '<button onclick="supprimerEq(\''+e[0]+'\')" style="padding:4px 8px;border-radius:6px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:11px;cursor:pointer;">🗑</button>'+
+      '</div>';
+    }).join('')+
+    '<div id="form-eq" style="display:none;margin-top:10px;background:#0a0a0a;border-radius:10px;padding:12px;border:1px solid #2a2a2a;">'+
+      '<input id="eq-nom" placeholder="Nom de l\'équipe" style="width:100%;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#fff;font-size:14px;font-weight:700;margin-bottom:8px;"/>'+
+      (t.ppt===2?
+        '<div style="display:flex;gap:6px;margin-bottom:8px;"><input id="eq-j1" placeholder="Joueur 1" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;"/><input id="eq-j2" placeholder="Joueur 2" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;"/></div>'
+        :'<input id="eq-j1" placeholder="Nom du joueur" style="width:100%;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;margin-bottom:8px;"/>')+
+      '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">'+
+        '<div style="position:relative;width:44px;height:44px;flex-shrink:0;">'+
+          '<div id="eq-photo-prev" style="width:44px;height:44px;border-radius:8px;background:#1a1a1a;border:2px dashed #333;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>'+
+          '<input type="file" accept="image/*" onchange="prevEqPhoto(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;"/>'+
+        '</div>'+
+        '<div style="font-size:11px;color:#555;line-height:1.4;">Photo de l\'équipe<br/>(optionnel)</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button onclick="hideAddEq()" style="flex:1;padding:9px;border-radius:9px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:13px;font-weight:700;cursor:pointer;">Annuler</button>'+
+        '<button onclick="ajouterEq()" style="flex:2;padding:9px;border-radius:9px;background:linear-gradient(135deg,#f4a100,#f77f00);border:none;color:#000;font-size:14px;font-weight:900;cursor:pointer;">✓ Inscrire</button>'+
+      '</div>'+
+    '</div></div>';
+
+  // Matchs
+  html+='<div style="background:#111;border-radius:14px;padding:14px;border:1px solid #1e1e1e;margin-bottom:14px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+      '<div style="font-size:10px;letter-spacing:2px;color:#555;">MATCHS</div>'+
+      '<button onclick="showAddMatch()" style="padding:5px 12px;border-radius:8px;background:#1d6fa4;border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">+ Créer</button>'+
+    '</div>'+
+    (prevus.length>0?'<div style="font-size:10px;color:#555;margin-bottom:6px;">PRÉVUS ('+prevus.length+')</div>'+prevus.map(function(e){return matchCard(e[0],e[1],eqMap);}).join(''):"")+
+    (enCours.length>0?'<div style="font-size:10px;color:#f4a100;margin:'+(prevus.length>0?"10px":0)+' 0 6px;">EN COURS ('+enCours.length+')</div>'+enCours.map(function(e){return matchCard(e[0],e[1],eqMap);}).join(''):"")+
+    (termines.length>0?'<div style="font-size:10px;color:#555;margin:'+(prevus.length+enCours.length>0?"10px":0)+' 0 6px;">TERMINÉS ('+termines.length+')</div>'+termines.map(function(e){return matchCard(e[0],e[1],eqMap);}).join(''):"")+
+    (matchs.length===0?'<div style="text-align:center;color:#2a2a2a;padding:14px;font-size:13px;">Aucun match créé</div>':"")+
+    '<div id="form-match" style="display:none;margin-top:10px;background:#0a0a0a;border-radius:10px;padding:12px;border:1px solid #2a2a2a;">'+
+      '<div style="font-size:10px;letter-spacing:2px;color:#555;margin-bottom:10px;">NOUVEAU MATCH</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
+        '<select id="m-home" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;"><option value="">Home</option>'+equipes.map(function(e){return '<option value="'+e[0]+'">'+e[1].nom+'</option>';}).join('')+'</select>'+
+        '<select id="m-away" style="flex:1;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;"><option value="">Away</option>'+equipes.map(function(e){return '<option value="'+e[0]+'">'+e[1].nom+'</option>';}).join('')+'</select>'+
+      '</div>'+
+      '<select id="m-terrain" style="width:100%;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:9px;color:#aaa;font-size:13px;margin-bottom:8px;"><option value="">Terrain</option>'+
+        Array.from({length:t.nTerrains},function(_,i){return '<option value="'+(i+1)+'">Terrain '+(i+1)+'</option>';}).join('')+
+      '</select>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button onclick="hideAddMatch()" style="flex:1;padding:9px;border-radius:9px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:13px;font-weight:700;cursor:pointer;">Annuler</button>'+
+        '<button onclick="ajouterMatch()" style="flex:2;padding:9px;border-radius:9px;background:linear-gradient(135deg,#1d6fa4,#0d47a1);border:none;color:#fff;font-size:14px;font-weight:900;cursor:pointer;">✓ Créer</button>'+
+      '</div>'+
+    '</div></div>';
+
+  html+='</div>';
+  $("root").innerHTML=html;
+
+  setTimeout(function(){
+    var qrEl=$("qr-t");
+    if(qrEl&&!qrEl.childNodes.length){
+      new QRCode(qrEl,{text:qrUrl,width:80,height:80,colorDark:"#000000",colorLight:"#ffffff"});
+    }
+  },50);
 }
 
-function renderCarteTournoi(id,m){
-  const mc=m.manche_courante;
-  const sA=mc?.sacs_A?.soumis,sB=mc?.sacs_B?.soumis;
-  return`<div style="background:#111;border-radius:13px;padding:14px;margin-bottom:10px;border:1px solid #1e1e1e;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div><div style="font-size:15px;font-weight:900;">${m.equipeA} <span style="color:#444;">vs</span> ${m.equipeB}</div>${m.terrain?`<div style="font-size:11px;color:#444;">${m.terrain} · ${m.winScore||21}pts · M${m.round||1}</div>`:""}</div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        ${flipHTML(m.scoreA||0,"#e63946",44,`t-${id}-a`)}
-        <span style="color:#333;font-size:18px;font-weight:900;">–</span>
-        ${flipHTML(m.scoreB||0,"#1d6fa4",44,`t-${id}-b`)}
-      </div>
-    </div>
-    <div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;">
-      <div style="display:flex;justify-content:space-between;color:#444;margin-bottom:4px;"><span>Manche ${m.round||1}</span><span style="color:${sA&&sB?"#2e7d32":"#f4a100"};">${sA&&sB?"En attente de validation":"Saisie en cours..."}</span></div>
-      <div style="display:flex;gap:6px;">
-        <div style="flex:1;text-align:center;padding:4px;background:#111;border-radius:6px;"><div style="font-size:9px;color:#444;margin-bottom:1px;">${m.equipeA}</div><div style="font-size:12px;font-weight:700;color:${sA?"#fff":"#333"};">${sA?"✓ Soumis":"En attente"}</div>${mc?.confirmation_A!=null?`<div style="font-size:10px;color:${mc.confirmation_A?"#2e7d32":"#e63946"};">${mc.confirmation_A?"✅":"❌"}</div>`:""}</div>
-        <div style="flex:1;text-align:center;padding:4px;background:#111;border-radius:6px;"><div style="font-size:9px;color:#444;margin-bottom:1px;">${m.equipeB}</div><div style="font-size:12px;font-weight:700;color:${sB?"#fff":"#333"};">${sB?"✓ Soumis":"En attente"}</div>${mc?.confirmation_B!=null?`<div style="font-size:10px;color:${mc.confirmation_B?"#2e7d32":"#e63946"};">${mc.confirmation_B?"✅":"❌"}</div>`:""}</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <div style="flex:1;background:#0a0a0a;border-radius:10px;padding:10px;text-align:center;border:1px solid #1a1a1a;"><div style="font-size:10px;color:#e63946;letter-spacing:1px;margin-bottom:6px;font-weight:700;">${m.equipeA}</div><div id="qr-a-${id}" style="display:flex;justify-content:center;"></div><div style="font-size:9px;color:#333;margin-top:4px;">Scanner pour jouer</div></div>
-      <div style="flex:1;background:#0a0a0a;border-radius:10px;padding:10px;text-align:center;border:1px solid #1a1a1a;"><div style="font-size:10px;color:#1d6fa4;letter-spacing:1px;margin-bottom:6px;font-weight:700;">${m.equipeB}</div><div id="qr-b-${id}" style="display:flex;justify-content:center;"></div><div style="font-size:9px;color:#333;margin-top:4px;">Scanner pour jouer</div></div>
-    </div>
-    <div style="display:flex;gap:6px;">
-      <button onclick="terminerMatchTournoi('${id}')" style="flex:1;padding:8px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#e63946;font-size:12px;font-weight:700;cursor:pointer;">✓ Terminer</button>
-      <button onclick="supprimerMatchTournoi('${id}')" style="padding:8px 14px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:12px;cursor:pointer;">🗑</button>
-    </div>
-  </div>`;
+function matchCard(id, m, eqMap) {
+  var home=eqMap[m.homeId]?eqMap[m.homeId].nom:"?";
+  var away=eqMap[m.awayId]?eqMap[m.awayId].nom:"?";
+  var sc=m.statut==="en_cours"?"#f4a100":m.statut==="termine"?"#2e7d32":"#555";
+  var sl=m.statut==="en_cours"?"⚡ EN COURS":m.statut==="termine"?"✅ TERMINÉ":"⏳ PRÉVU";
+  return '<div style="background:#0d0d0d;border-radius:11px;padding:11px 13px;margin-bottom:8px;border:1px solid '+(m.statut==="en_cours"?"#f4a10033":"#151515")+';position:relative;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
+      '<div style="font-size:12px;color:#444;letter-spacing:1px;">Terrain '+m.terrain+'</div>'+
+      '<div style="font-size:11px;color:'+sc+';font-weight:700;">'+sl+'</div>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;color:#e63946;">'+home+'</div><div style="font-size:10px;color:#444;">HOME</div></div>'+
+      (m.statut!=="prevu"?
+        '<div style="text-align:center;flex-shrink:0;">'+
+          '<div style="font-size:28px;font-weight:900;"><span style="color:#e63946;">'+(m.scoreHome||0)+'</span><span style="color:#333;margin:0 4px;">–</span><span style="color:#1d6fa4;">'+(m.scoreAway||0)+'</span></div>'+
+          '<div style="font-size:9px;color:#333;">R'+(m.round||1)+'</div>'+
+        '</div>'
+        :'<div style="font-size:18px;color:#2a2a2a;font-weight:900;">vs</div>')+
+      '<div style="flex:1;text-align:right;"><div style="font-size:14px;font-weight:700;color:#1d6fa4;">'+away+'</div><div style="font-size:10px;color:#444;text-align:right;">AWAY</div></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px;margin-top:8px;">'+
+      (m.statut==="prevu"?'<button onclick="lancerMatch(\''+id+'\')" style="flex:1;padding:7px;border-radius:8px;background:#f4a100;border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer;">▶ Lancer</button>':"")+
+      (m.statut==="en_cours"?'<button onclick="terminerMatch(\''+id+'\')" style="flex:1;padding:7px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#2e7d32;font-size:12px;font-weight:700;cursor:pointer;">✓ Terminer</button>':"")+
+      '<button onclick="supprimerMatch(\''+id+'\')" style="padding:7px 11px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:12px;cursor:pointer;">🗑</button>'+
+    '</div>'+
+  '</div>';
 }
 
-function genQR(cId,url){const c=document.getElementById(cId);if(!c||c.childNodes.length>0)return;new QRCode(c,{text:url,width:90,height:90,colorDark:"#ffffff",colorLight:"#0a0a0a"});}
-window.ajouterMatchTournoi=async()=>{
-  const nomA=$("tNomA").value.trim(),nomB=$("tNomB").value.trim();
-  if(!nomA||!nomB){alert("Entre les deux noms !");return;}
-  const mr=push(ref(db,`tournois/${tournoiId}/matchs`));
-  await set(mr,{equipeA:nomA,equipeB:nomB,scoreA:0,scoreB:0,winScore:parseInt($("tWin").value)||21,terrain:$("tTerrain").value,round:1,statut:"en_cours",cree:Date.now(),manche_courante:null});
-  $("tNomA").value="";$("tNomB").value="";
+var eqPhotoB64=null;
+window.prevEqPhoto=function(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){eqPhotoB64=e.target.result;var p=$("eq-photo-prev");if(p)p.innerHTML='<img src="'+eqPhotoB64+'" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"/>';};r.readAsDataURL(f);};
+window.showAddEq    = function(){var el=$("form-eq");if(el)el.style.display="block";};
+window.hideAddEq    = function(){var el=$("form-eq");if(el)el.style.display="none";eqPhotoB64=null;};
+window.ajouterEq    = function(){
+  var nom=($("eq-nom")&&$("eq-nom").value.trim())||"";
+  if(!nom){alert("Entre le nom !");return;}
+  var j1=($("eq-j1")&&$("eq-j1").value.trim())||"";
+  var j2=($("eq-j2")&&$("eq-j2").value.trim())||"";
+  var ref=db.ref("tournois/"+tournoiId+"/equipes").push();
+  ref.set({nom:nom,joueurs:[j1,j2].filter(function(j){return j;}),photo:eqPhotoB64||null,inscrit:Date.now()});
+  eqPhotoB64=null;
 };
-window.terminerMatchTournoi=async(id)=>{if(!confirm("Terminer ce match ?"))return;await update(ref(db,`tournois/${tournoiId}/matchs/${id}`),{statut:"termine"});};
-window.supprimerMatchTournoi=async(id)=>{if(!confirm("Supprimer ce match ?"))return;await remove(ref(db,`tournois/${tournoiId}/matchs/${id}`));};
-window.nouveauTournoi=()=>{if(!confirm("Créer un nouveau tournoi ?"))return;tournoiId=null;localStorage.removeItem("cornhole_admin_id");renderSetupTournoi();};
-window.supprimerTournoi=async()=>{
-  if(!confirm(`Supprimer définitivement "${tournoi?.nom}" et tous ses matchs ?\n\nCette action est irréversible.`))return;
-  await remove(ref(db,`tournois/${tournoiId}`));
-  tournoiId=null;localStorage.removeItem("cornhole_admin_id");
-  tournoi=null;renderHome();
+window.supprimerEq  = function(eid){if(!confirm("Supprimer cette équipe ?"))return;db.ref("tournois/"+tournoiId+"/equipes/"+eid).remove();};
+window.showAddMatch  = function(){var el=$("form-match");if(el)el.style.display="block";};
+window.hideAddMatch  = function(){var el=$("form-match");if(el)el.style.display="none";};
+window.ajouterMatch  = function(){
+  var homeId=($("m-home")&&$("m-home").value)||"";
+  var awayId=($("m-away")&&$("m-away").value)||"";
+  var terrain=($("m-terrain")&&$("m-terrain").value)||"";
+  if(!homeId||!awayId||!terrain){alert("Sélectionne Home, Away et Terrain !");return;}
+  if(homeId===awayId){alert("Les deux équipes doivent être différentes !");return;}
+  var ref=db.ref("tournois/"+tournoiId+"/matchs").push();
+  ref.set({homeId:homeId,awayId:awayId,terrain:parseInt(terrain),winScore:tournoi.winScore,maxRounds:tournoi.maxRounds||null,scoreHome:0,scoreAway:0,round:1,statut:"prevu",cree:Date.now()});
+  var el=$("form-match");if(el)el.style.display="none";
 };
+window.lancerMatch   = function(id){db.ref("tournois/"+tournoiId+"/matchs/"+id).update({statut:"en_cours"});};
+window.terminerMatch = function(id){if(!confirm("Terminer ce match ?"))return;db.ref("tournois/"+tournoiId+"/matchs/"+id).update({statut:"termine"});};
+window.supprimerMatch= function(id){if(!confirm("Supprimer ?"))return;db.ref("tournois/"+tournoiId+"/matchs/"+id).remove();};
+window.supprimerTournoi=function(){if(!confirm("Supprimer définitivement ce tournoi ?\nIrréversible."))return;db.ref("tournois/"+tournoiId).remove();tournoiId=null;localStorage.removeItem("cornhole_admin_id");tournoi=null;renderHome();};
 
-// ── Init ──
+// Init
 renderHome();
 </script>
 </body>
